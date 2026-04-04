@@ -10,6 +10,7 @@ from config import SYSTEM_PROMPT
 # Yielded event types
 TOKEN = "token"
 SENTENCE = "sentence"
+TOOL_USE = "tool_use"
 
 
 class Assistant:
@@ -97,6 +98,12 @@ class Assistant:
                 if event.get("type") == "assistant":
                     message = event.get("message", {})
                     for block in message.get("content", []):
+                        if block.get("type") == "tool_use":
+                            tool_name = block.get("name", "")
+                            tool_input = block.get("input", {})
+                            desc = tool_input.get("description", "") or tool_input.get("command", "") or ""
+                            yield TOOL_USE, json.dumps({"name": tool_name, "description": desc})
+
                         if block.get("type") == "text":
                             full_text = block.get("text", "")
                             new_text = full_text[last_text_len:]

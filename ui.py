@@ -88,6 +88,25 @@ def show_jarvis_token(text: str):
     print(text, end="", flush=True)
 
 
+YELLOW = "\033[93m"
+
+
+def show_tool_use(tool_name: str, description: str = ""):
+    label = description if description else tool_name
+    try:
+        cols = os.get_terminal_size().columns
+    except OSError:
+        cols = 80
+    max_len = cols - 12
+    if len(label) > max_len:
+        label = label[:max_len] + "..."
+    print(f"\n  {YELLOW}[{tool_name}]{RESET} {DIM}{label}{RESET}")
+
+
+def show_tool_done():
+    pass
+
+
 def show_jarvis_end():
     print()
 

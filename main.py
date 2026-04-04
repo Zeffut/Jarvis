@@ -27,7 +27,7 @@ from config import (
 )
 from wake_word import WakeWordListener
 from transcriber import Transcriber
-from assistant import Assistant, TOKEN, SENTENCE
+from assistant import Assistant, TOKEN, SENTENCE, TOOL_USE
 from speaker import speak, preload_greeting, play_greeting
 from audio import is_silent
 import ui
@@ -146,8 +146,6 @@ def conversation_loop(
                 break
 
             ui.show_user_text(final_text)
-            ui.show_jarvis_start()
-
             # Queue sentences for TTS in background thread
             import queue
             tts_queue: queue.Queue[str | None] = queue.Queue()
@@ -168,21 +166,25 @@ def conversation_loop(
             full_response = ""
             display_buffer = ""
 
+            jarvis_started = False
             for event_type, text in assistant.ask_stream(final_text):
-                if event_type == TOKEN:
+                if event_type == TOOL_USE:
+                    import json as _json
+                    tool_info = _json.loads(text)
+                    ui.show_tool_use(tool_info["name"], tool_info.get("description", ""))
+                elif event_type == TOKEN:
+                    if not jarvis_started:
+                        ui.show_jarvis_start()
+                        jarvis_started = True
                     full_response += text
                     display_buffer += text
-                    # Hold back display if we might be in a [FIN] sequence
                     if "[" in display_buffer:
-                        # Wait to see if it completes to [FIN]
                         if END_SIGNAL in display_buffer:
-                            # Output everything before [FIN]
                             before = display_buffer.split(END_SIGNAL)[0]
                             if before:
                                 ui.show_jarvis_token(before)
                             display_buffer = ""
                             end_conversation = True
-                        # Otherwise keep buffering
                     else:
                         ui.show_jarvis_token(display_buffer)
                         display_buffer = ""
