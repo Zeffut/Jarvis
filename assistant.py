@@ -23,7 +23,7 @@ class Assistant:
             "--model", self.model,
             "--output-format", "stream-json",
             "--verbose",
-            "--bare",
+            "--dangerously-skip-permissions",
             "--system-prompt", SYSTEM_PROMPT,
         ]
         if self.session_id:
