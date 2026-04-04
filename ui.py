@@ -65,6 +65,10 @@ def show_listening():
     print(f"{CLEAR_LINE}  {BLUE}[...]{RESET} ", end="", flush=True)
 
 
+def show_user_preview(text: str):
+    print(f"{CLEAR_LINE}  {DIM}Vous > {text}{RESET}", end="", flush=True)
+
+
 def show_user_text(text: str):
     print(f"{CLEAR_LINE}  {BOLD}Vous{RESET} {DIM}>{RESET} {text}")
 

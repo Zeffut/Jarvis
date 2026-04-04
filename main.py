@@ -8,6 +8,8 @@ import logging
 warnings.filterwarnings("ignore")
 os.environ["PYTHONWARNINGS"] = "ignore"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 logging.disable(logging.CRITICAL)
 
 import time
@@ -28,6 +30,8 @@ from assistant import Assistant
 from speaker import speak, preload_greeting, play_greeting
 from audio import is_silent
 import ui
+
+PREVIEW_INTERVAL = 0.4  # seconds between preview transcriptions
 
 
 class MicBuffer:
@@ -67,17 +71,6 @@ class MicBuffer:
             self.silence_start = None
             self.done = False
 
-    def wait_for_speech(self, timeout: float = 0) -> str | None:
-        start = time.time()
-        while not self.done:
-            time.sleep(0.05)
-            if timeout > 0 and not self.speech_started and time.time() - start >= timeout:
-                return None
-        with self._lock:
-            if not self.chunks:
-                return None
-            return "ok"
-
     def get_audio(self) -> np.ndarray | None:
         with self._lock:
             if not self.chunks:
@@ -85,9 +78,46 @@ class MicBuffer:
             return np.concatenate(self.chunks)
 
 
+def record_with_preview(mic: MicBuffer, preview_model, timeout: float = 0) -> np.ndarray | None:
+    """Wait for speech with real-time preview transcription. Returns audio or None on timeout."""
+    start = time.time()
+    last_preview = 0.0
+    last_chunk_count = 0
+
+    ui.show_listening()
+
+    while not mic.done:
+        time.sleep(0.05)
+        now = time.time()
+
+        # Timeout check (only before speech starts)
+        if timeout > 0 and not mic.speech_started and now - start >= timeout:
+            return None
+
+        # Preview transcription while recording
+        if mic.speech_started and now - last_preview >= PREVIEW_INTERVAL:
+            with mic._lock:
+                chunk_count = len(mic.chunks)
+            if chunk_count > last_chunk_count:
+                audio = mic.get_audio()
+                if audio is not None and len(audio) > 0:
+                    last_preview = now
+                    last_chunk_count = chunk_count
+                    # Use tiny model for fast preview
+                    segments, _ = preview_model.transcribe(
+                        audio, language="fr", beam_size=1,
+                    )
+                    preview = "".join(seg.text for seg in segments).strip()
+                    if preview:
+                        ui.show_user_preview(preview)
+
+    return mic.get_audio()
+
+
 def conversation_loop(
     transcriber: Transcriber,
     assistant: Assistant,
+    preview_model,
     elevenlabs_key: str,
 ) -> None:
     mic = MicBuffer()
@@ -102,18 +132,14 @@ def conversation_loop(
         first_turn = True
         while True:
             timeout = 0 if first_turn else CONVERSATION_TIMEOUT
-            ui.show_listening()
 
-            result = mic.wait_for_speech(timeout=timeout)
+            audio = record_with_preview(mic, preview_model, timeout=timeout)
             first_turn = False
 
-            if result is None:
-                break
-
-            audio = mic.get_audio()
             if audio is None:
                 break
 
+            # Final accurate transcription with mlx-whisper turbo
             final_text = transcriber.transcribe(audio)
             if not final_text:
                 break
@@ -151,13 +177,16 @@ def main():
 
     ui.show_ready()
 
+    # Reuse wake word's tiny model for real-time preview
+    preview_model = wake.model
+
     try:
         while True:
             ui.show_standby()
             wake.listen()
             ui.show_wake()
             play_greeting()
-            conversation_loop(transcriber, assistant, cfg["elevenlabs_api_key"])
+            conversation_loop(transcriber, assistant, preview_model, cfg["elevenlabs_api_key"])
     except KeyboardInterrupt:
         ui.show_shutdown()
     finally:
