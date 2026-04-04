@@ -32,7 +32,7 @@ class WakeWordListener:
 
     def listen(self) -> None:
         """Block until 'Jarvis' is detected using rolling buffer."""
-        print("\n🟢 En écoute...")
+        # UI handled by main.py
 
         buffer = np.zeros(BUFFER_SAMPLES, dtype=np.float32)
         has_speech = False
@@ -64,7 +64,6 @@ class WakeWordListener:
                     text = self._transcribe(buffer.copy())
 
                     if any(v in text for v in WAKE_VARIANTS):
-                        print("🎙️  Je vous écoute...")
                         return
 
     def cleanup(self) -> None:

@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-import sys
+# Suppress all warnings and logs before any imports
+import warnings
+import os
+import logging
+
+warnings.filterwarnings("ignore")
+os.environ["PYTHONWARNINGS"] = "ignore"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+logging.disable(logging.CRITICAL)
+
 import time
 import threading
 import numpy as np
@@ -18,6 +27,7 @@ from transcriber import Transcriber
 from assistant import Assistant
 from speaker import speak, preload_greeting, play_greeting
 from audio import is_silent
+import ui
 
 
 class MicBuffer:
@@ -58,7 +68,6 @@ class MicBuffer:
             self.done = False
 
     def wait_for_speech(self, timeout: float = 0) -> str | None:
-        """Wait until speech is recorded and silence detected. Returns None on timeout."""
         start = time.time()
         while not self.done:
             time.sleep(0.05)
@@ -81,7 +90,6 @@ def conversation_loop(
     assistant: Assistant,
     elevenlabs_key: str,
 ) -> None:
-    """Conversation with mic always open."""
     mic = MicBuffer()
 
     with sd.InputStream(
@@ -94,13 +102,12 @@ def conversation_loop(
         first_turn = True
         while True:
             timeout = 0 if first_turn else CONVERSATION_TIMEOUT
-            print("🎤 ...", end="", flush=True)
+            ui.show_listening()
 
             result = mic.wait_for_speech(timeout=timeout)
             first_turn = False
 
             if result is None:
-                print("\r   ", end="\r")
                 break
 
             audio = mic.get_audio()
@@ -108,49 +115,51 @@ def conversation_loop(
                 break
 
             final_text = transcriber.transcribe(audio)
-            print(f"\r💬 {final_text}   ")
-
             if not final_text:
                 break
 
-            print(f"🤖 ", end="", flush=True)
+            ui.show_user_text(final_text)
+            ui.show_jarvis_start()
 
-            # Stream Claude response and speak sentence by sentence
-            # Mic stays open — captures user speech as soon as TTS ends
             for sentence in assistant.ask_stream(final_text):
-                print(sentence, end=" ", flush=True)
+                ui.show_jarvis_token(sentence + " ")
                 speak(sentence, api_key=elevenlabs_key)
 
-            print()
-
-            # Reset mic buffer for next turn — mic is still open
+            ui.show_jarvis_end()
             mic.reset()
 
+    ui.show_end_conversation()
     assistant.reset()
 
 
 def main():
-    print("🚀 Jarvis démarre...")
+    ui.show_boot()
+
     cfg = load_config()
 
-    print("📦 Chargement du modèle Whisper...")
+    ui.show_loading("Modele Whisper...")
     transcriber = Transcriber()
 
+    ui.show_loading("Intelligence artificielle...")
     assistant = Assistant(api_key=cfg["anthropic_api_key"])
 
-    print("📦 Chargement du modèle wake word...")
+    ui.show_loading("Detection vocale...")
     wake = WakeWordListener()
 
-    print("🔊 Pré-chargement de la voix...")
+    ui.show_loading("Synthese vocale...")
     preload_greeting(api_key=cfg["elevenlabs_api_key"])
+
+    ui.show_ready()
 
     try:
         while True:
+            ui.show_standby()
             wake.listen()
+            ui.show_wake()
             play_greeting()
             conversation_loop(transcriber, assistant, cfg["elevenlabs_api_key"])
     except KeyboardInterrupt:
-        print("\n👋 Jarvis s'éteint.")
+        ui.show_shutdown()
     finally:
         wake.cleanup()
 
