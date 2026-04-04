@@ -16,7 +16,7 @@ def test_assistant_sends_message_and_returns_response():
     assert reply == "Bonjour, comment puis-je vous aider ?"
     mock_client.messages.create.assert_called_once()
     call_kwargs = mock_client.messages.create.call_args[1]
-    assert call_kwargs["model"] == "claude-haiku-4-5-20241001"
+    assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
     assert len(call_kwargs["messages"]) == 1
     assert call_kwargs["messages"][0]["role"] == "user"
     assert call_kwargs["messages"][0]["content"] == "Salut Jarvis"

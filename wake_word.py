@@ -1,43 +1,65 @@
 from __future__ import annotations
 
+import time
 import numpy as np
 import sounddevice as sd
-import openwakeword
-from openwakeword.model import Model
 
-from config import SAMPLE_RATE
+from audio import is_silent
+from config import SAMPLE_RATE, SILENCE_THRESHOLD
 
 
-# openwakeword expects 16kHz, 16-bit, mono audio in 80ms chunks (1280 samples)
-OWW_CHUNK_SIZE = 1280
-DETECTION_THRESHOLD = 0.5
+WAKE_WORD = "jarvis"
+CHUNK_SAMPLES = int(SAMPLE_RATE * 0.3)  # 300ms chunks
+MAX_RECORD_SECONDS = 2.5
+WAKE_SILENCE_DURATION = 0.4
 
 
 class WakeWordListener:
-    def __init__(self):
-        openwakeword.utils.download_models(["hey_jarvis_v0.1"])
-        self.model = Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
+    def __init__(self, transcriber):
+        self.transcriber = transcriber
 
     def listen(self) -> None:
-        """Block until 'Hey Jarvis' is detected."""
-        print("\n🟢 En écoute... (dis 'Hey Jarvis')")
-        self.model.reset()
+        """Block until 'Jarvis' is detected."""
+        print("\n🟢 En écoute...")
 
         with sd.InputStream(
             samplerate=SAMPLE_RATE,
             channels=1,
-            dtype="int16",
-            blocksize=OWW_CHUNK_SIZE,
+            dtype="float32",
+            blocksize=CHUNK_SAMPLES,
         ) as stream:
             while True:
-                audio_frame, _ = stream.read(OWW_CHUNK_SIZE)
-                pcm = audio_frame.flatten()
-                prediction = self.model.predict(pcm)
+                # Wait for speech
+                audio_frame, _ = stream.read(CHUNK_SAMPLES)
+                chunk = audio_frame[:, 0]
 
-                for wake_word, score in prediction.items():
-                    if score > DETECTION_THRESHOLD:
-                        print("🎙️  Je vous écoute...")
-                        return
+                if is_silent(chunk, SILENCE_THRESHOLD):
+                    continue
+
+                # Speech detected — record short segment
+                chunks = [chunk.copy()]
+                silence_start = None
+                start = time.time()
+
+                while time.time() - start < MAX_RECORD_SECONDS:
+                    audio_frame, _ = stream.read(CHUNK_SAMPLES)
+                    c = audio_frame[:, 0].copy()
+                    chunks.append(c)
+
+                    if is_silent(c, SILENCE_THRESHOLD):
+                        if silence_start is None:
+                            silence_start = time.time()
+                        elif time.time() - silence_start >= WAKE_SILENCE_DURATION:
+                            break
+                    else:
+                        silence_start = None
+
+                audio = np.concatenate(chunks)
+                text = self.transcriber.transcribe(audio).lower()
+
+                if WAKE_WORD in text:
+                    print("🎙️  Je vous écoute...")
+                    return
 
     def cleanup(self) -> None:
         pass
