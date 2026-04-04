@@ -45,8 +45,8 @@ def preload_greeting(api_key: str, voice_id: str = ELEVENLABS_VOICE_ID) -> None:
     audio_gen = client.text_to_speech.convert(
         text="Oui Monsieur ?",
         voice_id=voice_id,
-        model_id="eleven_turbo_v2_5",
-        output_format="mp3_22050_32",
+        model_id="eleven_multilingual_v2",
+        output_format="mp3_44100_128",
     )
     audio_bytes = b"".join(audio_gen)
 
@@ -77,8 +77,8 @@ def speak(text: str, api_key: str, voice_id: str = ELEVENLABS_VOICE_ID, wait: bo
     audio_gen = client.text_to_speech.convert(
         text=text,
         voice_id=voice_id,
-        model_id="eleven_turbo_v2_5",
-        output_format="mp3_22050_32",
+        model_id="eleven_multilingual_v2",
+        output_format="mp3_44100_128",
     )
 
     audio_bytes = b"".join(audio_gen)
