@@ -9,7 +9,7 @@ SILENCE_DURATION = 1.5
 CONVERSATION_TIMEOUT = 5.0
 WHISPER_MODEL = "small"
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-ELEVENLABS_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"  # Lily (French)
+ELEVENLABS_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"  # Daniel (British, deep, butler-like)
 
 SYSTEM_PROMPT = (
     "Tu es Jarvis, l'assistant vocal intelligent. "
