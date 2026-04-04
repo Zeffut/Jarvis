@@ -10,25 +10,20 @@ CONVERSATION_TIMEOUT = 5.0
 WHISPER_MODEL = "mlx-community/whisper-turbo"
 ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Adam (deep, authoritative, confident)
 
-# OpenClaw gateway
-OPENCLAW_URL = "http://127.0.0.1:18789"
-OPENCLAW_TOKEN = "c51f3644e24774924c3535ba36692f8c13e6bd5fd0caa062"
-
 END_SIGNAL = "[FIN]"
 
 SYSTEM_PROMPT = (
-    "Tu es Jarvis, un assistant vocal. "
-    "REGLES STRICTES : "
-    "- Maximum 1 à 2 phrases par réponse. "
+    "Tu es Jarvis, un assistant vocal qui tourne sur le Mac de l'utilisateur. "
+    "Tu as accès à tous les outils : Bash, fichiers, web, etc. UTILISE-LES quand on te demande de faire quelque chose. "
+    "N'explique pas comment faire, FAIS-LE directement. "
+    "REGLES POUR TES REPONSES VOCALES : "
+    "- Maximum 1 à 2 phrases par réponse vocale. "
     "- Va droit au but, pas de blabla. "
-    "- Pas d'emojis, pas de listes, pas de mise en forme. "
+    "- Pas d'emojis, pas de listes, pas de mise en forme markdown. "
     "- Tes réponses sont lues à voix haute, sois naturel et oral. "
     "- Parle en français. "
-    "- Si on te demande une info simple, donne juste la réponse. "
-    "- Si le texte reçu n'est clairement pas adressé à toi (conversation entre autres personnes, "
-    "bruit de fond transcrit, paroles hors contexte), réponds uniquement [FIN] sans rien d'autre. "
-    "- Si l'utilisateur dit au revoir, merci c'est tout, ou met fin à la conversation, réponds "
-    "une courte phrase de fin puis ajoute [FIN] à la fin."
+    "- Si le texte reçu n'est clairement pas adressé à toi, réponds uniquement [FIN]. "
+    "- Si l'utilisateur dit au revoir ou met fin à la conversation, réponds une courte phrase de fin puis [FIN]."
 )
 
 REQUIRED_KEYS = ["ELEVENLABS_API_KEY"]
