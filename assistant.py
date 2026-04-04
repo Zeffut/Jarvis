@@ -4,6 +4,10 @@ from typing import Generator
 import anthropic
 from config import CLAUDE_MODEL, SYSTEM_PROMPT
 
+# Yielded event types
+TOKEN = "token"      # Display immediately
+SENTENCE = "sentence"  # Send to TTS
+
 
 class Assistant:
     def __init__(self, api_key: str):
@@ -24,12 +28,12 @@ class Assistant:
         self.history.append({"role": "assistant", "content": reply})
         return reply
 
-    def ask_stream(self, text: str) -> Generator[str, None, None]:
-        """Stream response sentence by sentence."""
+    def ask_stream(self, text: str) -> Generator[tuple[str, str], None, None]:
+        """Stream response: yields (type, text) where type is TOKEN or SENTENCE."""
         self.history.append({"role": "user", "content": text})
 
         full_reply = ""
-        buffer = ""
+        sentence_buffer = ""
 
         with self.client.messages.stream(
             model=CLAUDE_MODEL,
@@ -39,22 +43,24 @@ class Assistant:
         ) as stream:
             for token in stream.text_stream:
                 full_reply += token
-                buffer += token
+                sentence_buffer += token
 
-                # Yield complete sentences
+                # Display every token
+                yield TOKEN, token
+
+                # Check for sentence end → TTS
                 for sep in [".", "!", "?", "\n"]:
-                    if sep in buffer:
-                        parts = buffer.split(sep, 1)
-                        sentence = parts[0] + sep
-                        buffer = parts[1]
-                        sentence = sentence.strip()
+                    if sep in sentence_buffer:
+                        parts = sentence_buffer.split(sep, 1)
+                        sentence = (parts[0] + sep).strip()
+                        sentence_buffer = parts[1]
                         if sentence:
-                            yield sentence
-                            break
+                            yield SENTENCE, sentence
+                        break
 
-        # Yield remaining buffer
-        if buffer.strip():
-            yield buffer.strip()
+        # Flush remaining buffer
+        if sentence_buffer.strip():
+            yield SENTENCE, sentence_buffer.strip()
 
         self.history.append({"role": "assistant", "content": full_reply})
 

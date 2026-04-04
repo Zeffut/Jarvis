@@ -26,7 +26,7 @@ from config import (
 )
 from wake_word import WakeWordListener
 from transcriber import Transcriber
-from assistant import Assistant
+from assistant import Assistant, TOKEN, SENTENCE
 from speaker import speak, preload_greeting, play_greeting
 from audio import is_silent
 import ui
@@ -147,9 +147,11 @@ def conversation_loop(
             ui.show_user_text(final_text)
             ui.show_jarvis_start()
 
-            for sentence in assistant.ask_stream(final_text):
-                ui.show_jarvis_token(sentence + " ")
-                speak(sentence, api_key=elevenlabs_key)
+            for event_type, text in assistant.ask_stream(final_text):
+                if event_type == TOKEN:
+                    ui.show_jarvis_token(text)
+                elif event_type == SENTENCE:
+                    speak(text, api_key=elevenlabs_key)
 
             ui.show_jarvis_end()
             mic.reset()
