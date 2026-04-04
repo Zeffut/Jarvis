@@ -66,7 +66,14 @@ def show_listening():
 
 
 def show_user_preview(text: str):
-    print(f"{CLEAR_LINE}  {DIM}Vous > {text}{RESET}", end="", flush=True)
+    try:
+        cols = os.get_terminal_size().columns
+    except OSError:
+        cols = 80
+    prefix = "  Vous > "
+    max_text = cols - len(prefix) - 2
+    truncated = text[:max_text] if len(text) > max_text else text
+    print(f"{CLEAR_LINE}  {DIM}Vous > {truncated}{RESET}", end="", flush=True)
 
 
 def show_user_text(text: str):

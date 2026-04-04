@@ -165,20 +165,41 @@ def conversation_loop(
             tts_thread = threading.Thread(target=tts_worker, daemon=True)
             tts_thread.start()
 
+            # Collect full response, display tokens, queue sentences for TTS
+            # Buffer tokens to detect [FIN] before displaying
             full_response = ""
+            display_buffer = ""
+
             for event_type, text in assistant.ask_stream(final_text):
                 if event_type == TOKEN:
-                    # Don't display [FIN] marker
-                    if END_SIGNAL not in (full_response + text):
-                        ui.show_jarvis_token(text)
                     full_response += text
+                    display_buffer += text
+                    # Hold back display if we might be in a [FIN] sequence
+                    if "[" in display_buffer:
+                        # Wait to see if it completes to [FIN]
+                        if END_SIGNAL in display_buffer:
+                            # Output everything before [FIN]
+                            before = display_buffer.split(END_SIGNAL)[0]
+                            if before:
+                                ui.show_jarvis_token(before)
+                            display_buffer = ""
+                            end_conversation = True
+                        # Otherwise keep buffering
+                    else:
+                        ui.show_jarvis_token(display_buffer)
+                        display_buffer = ""
                 elif event_type == SENTENCE:
-                    # Strip [FIN] from spoken text
                     clean = text.replace(END_SIGNAL, "").strip()
                     if clean:
                         tts_queue.put(clean)
                     if END_SIGNAL in text:
                         end_conversation = True
+
+            # Flush remaining display buffer (minus any [FIN])
+            if display_buffer:
+                clean_display = display_buffer.replace(END_SIGNAL, "")
+                if clean_display:
+                    ui.show_jarvis_token(clean_display)
 
             # Check if entire response is just [FIN]
             if full_response.strip() == END_SIGNAL:
