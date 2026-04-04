@@ -63,7 +63,7 @@ def play_greeting() -> None:
         sd.wait()
 
 
-def speak(text: str, api_key: str, voice_id: str = ELEVENLABS_VOICE_ID) -> None:
+def speak(text: str, api_key: str, voice_id: str = ELEVENLABS_VOICE_ID, wait: bool = True) -> None:
     client = _get_client(api_key)
     audio_gen = client.text_to_speech.convert(
         text=text,
@@ -76,4 +76,5 @@ def speak(text: str, api_key: str, voice_id: str = ELEVENLABS_VOICE_ID) -> None:
     samples, rate = _audio_to_samples(audio_bytes)
 
     sd.play(samples, samplerate=rate)
-    sd.wait()
+    if wait:
+        sd.wait()

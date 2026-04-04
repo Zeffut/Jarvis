@@ -98,9 +98,12 @@ def conversation_loop(
         print(f"\n🤖 ", end="", flush=True)
 
         # Stream Claude response and speak sentence by sentence
-        for sentence in assistant.ask_stream(text):
+        # Last sentence plays without waiting so mic can open immediately
+        sentences = list(assistant.ask_stream(text))
+        for i, sentence in enumerate(sentences):
             print(sentence, end=" ", flush=True)
-            speak(sentence, api_key=elevenlabs_key)
+            is_last = i == len(sentences) - 1
+            speak(sentence, api_key=elevenlabs_key, wait=not is_last)
 
         print()
 
