@@ -210,11 +210,10 @@ def conversation_loop(
             tts_thread.join()
 
             ui.show_jarvis_end()
+            mic.reset()
 
             if end_conversation:
                 break
-
-            mic.reset()
 
     ui.show_end_conversation()
     assistant.reset()
