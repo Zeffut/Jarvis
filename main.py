@@ -25,6 +25,7 @@ from config import (
     CONVERSATION_TIMEOUT,
     OPENCLAW_URL,
     OPENCLAW_TOKEN,
+    END_SIGNAL,
 )
 from wake_word import WakeWordListener
 from transcriber import Transcriber
@@ -152,6 +153,7 @@ def conversation_loop(
             # Queue sentences for TTS in background thread
             import queue
             tts_queue: queue.Queue[str | None] = queue.Queue()
+            end_conversation = False
 
             def tts_worker():
                 while True:
@@ -163,17 +165,34 @@ def conversation_loop(
             tts_thread = threading.Thread(target=tts_worker, daemon=True)
             tts_thread.start()
 
+            full_response = ""
             for event_type, text in assistant.ask_stream(final_text):
                 if event_type == TOKEN:
-                    ui.show_jarvis_token(text)
+                    # Don't display [FIN] marker
+                    if END_SIGNAL not in (full_response + text):
+                        ui.show_jarvis_token(text)
+                    full_response += text
                 elif event_type == SENTENCE:
-                    tts_queue.put(text)
+                    # Strip [FIN] from spoken text
+                    clean = text.replace(END_SIGNAL, "").strip()
+                    if clean:
+                        tts_queue.put(clean)
+                    if END_SIGNAL in text:
+                        end_conversation = True
+
+            # Check if entire response is just [FIN]
+            if full_response.strip() == END_SIGNAL:
+                end_conversation = True
 
             # Wait for TTS to finish
             tts_queue.put(None)
             tts_thread.join()
 
             ui.show_jarvis_end()
+
+            if end_conversation:
+                break
+
             mic.reset()
 
     ui.show_end_conversation()
