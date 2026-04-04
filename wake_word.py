@@ -3,20 +3,31 @@ from __future__ import annotations
 import time
 import numpy as np
 import sounddevice as sd
+from faster_whisper import WhisperModel
 
 from audio import is_silent
 from config import SAMPLE_RATE, SILENCE_THRESHOLD
 
 
 WAKE_VARIANTS = {"jarvis", "j'avis", "jarvisse", "gervis", "jarvi", "chavis", "gervais", "j'arrive"}
-CHUNK_SAMPLES = int(SAMPLE_RATE * 0.3)  # 300ms chunks
-MAX_RECORD_SECONDS = 2.5
-WAKE_SILENCE_DURATION = 0.4
+CHUNK_SAMPLES = int(SAMPLE_RATE * 0.2)  # 200ms chunks
+MAX_RECORD_SECONDS = 1.5
+WAKE_SILENCE_DURATION = 0.3
 
 
 class WakeWordListener:
-    def __init__(self, transcriber):
-        self.transcriber = transcriber
+    def __init__(self):
+        self.model = WhisperModel("tiny", compute_type="auto")
+
+    def _transcribe(self, audio: np.ndarray) -> str:
+        segments, _ = self.model.transcribe(
+            audio,
+            language="fr",
+            beam_size=1,
+            initial_prompt="Jarvis",
+            hotwords="Jarvis",
+        )
+        return "".join(seg.text for seg in segments).strip().lower()
 
     def listen(self) -> None:
         """Block until 'Jarvis' is detected."""
@@ -29,7 +40,6 @@ class WakeWordListener:
             blocksize=CHUNK_SAMPLES,
         ) as stream:
             while True:
-                # Wait for speech
                 audio_frame, _ = stream.read(CHUNK_SAMPLES)
                 chunk = audio_frame[:, 0]
 
@@ -55,7 +65,7 @@ class WakeWordListener:
                         silence_start = None
 
                 audio = np.concatenate(chunks)
-                text = self.transcriber.transcribe(audio).lower()
+                text = self._transcribe(audio)
 
                 if any(v in text for v in WAKE_VARIANTS):
                     print("🎙️  Je vous écoute...")
