@@ -68,6 +68,7 @@ def record_and_transcribe(transcriber: Transcriber) -> str:
 def conversation_loop(
     transcriber: Transcriber,
     assistant: Assistant,
+    elevenlabs_key: str,
 ) -> None:
     """Run a conversation: record → transcribe → ask Claude → speak → repeat until timeout."""
     while True:
@@ -79,7 +80,7 @@ def conversation_loop(
         print(f"\n🤖 Réflexion...")
         reply = assistant.ask(text)
         print(f"🤖 {reply}")
-        speak(reply)
+        speak(reply, api_key=elevenlabs_key)
 
         # Wait for follow-up speech or timeout
         print("\n⏳ En attente...")
@@ -124,7 +125,7 @@ def main():
     try:
         while True:
             wake.listen()
-            conversation_loop(transcriber, assistant)
+            conversation_loop(transcriber, assistant, cfg["elevenlabs_api_key"])
     except KeyboardInterrupt:
         print("\n👋 Jarvis s'éteint.")
     finally:

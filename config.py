@@ -9,7 +9,7 @@ SILENCE_DURATION = 1.5
 CONVERSATION_TIMEOUT = 5.0
 WHISPER_MODEL = "small"
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-SAY_VOICE = "Thomas"
+ELEVENLABS_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"  # Lily (French)
 
 SYSTEM_PROMPT = (
     "Tu es Jarvis, l'assistant vocal intelligent. "
@@ -17,7 +17,7 @@ SYSTEM_PROMPT = (
     "Tu parles en français. Tes réponses doivent être courtes car elles seront lues à voix haute."
 )
 
-REQUIRED_KEYS = ["ANTHROPIC_API_KEY"]
+REQUIRED_KEYS = ["ANTHROPIC_API_KEY", "ELEVENLABS_API_KEY"]
 
 
 def load_config(env_path: str = ".env") -> dict:
