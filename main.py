@@ -20,14 +20,22 @@ from audio import is_silent
 
 
 def record_and_transcribe(transcriber: Transcriber) -> str:
-    """Record audio until silence, then transcribe."""
+    """Record audio until silence, then transcribe. Waits for speech first."""
     chunks: list[np.ndarray] = []
     silence_start: float | None = None
+    speech_started = False
     recording = True
 
     def audio_callback(indata, frames, time_info, status):
-        nonlocal silence_start, recording
+        nonlocal silence_start, recording, speech_started
         chunk = indata[:, 0].copy()
+
+        if not speech_started:
+            if not is_silent(chunk, SILENCE_THRESHOLD):
+                speech_started = True
+                chunks.append(chunk)
+            return
+
         chunks.append(chunk)
 
         if is_silent(chunk, SILENCE_THRESHOLD):
