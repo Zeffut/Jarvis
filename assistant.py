@@ -34,7 +34,7 @@ class Assistant:
             json={
                 "model": "openclaw/default",
                 "messages": messages,
-                "max_tokens": 300,
+                "max_tokens": 150,
                 "stream": False,
             },
             timeout=120,
@@ -56,7 +56,7 @@ class Assistant:
             json={
                 "model": "openclaw/default",
                 "messages": messages,
-                "max_tokens": 300,
+                "max_tokens": 150,
                 "stream": True,
             },
             stream=True,

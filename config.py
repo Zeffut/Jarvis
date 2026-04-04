@@ -8,7 +8,7 @@ SILENCE_THRESHOLD = 0.01
 SILENCE_DURATION = 1.5
 CONVERSATION_TIMEOUT = 5.0
 WHISPER_MODEL = "mlx-community/whisper-turbo"
-ELEVENLABS_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"  # Daniel (British, deep, butler-like)
+ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Adam (deep, authoritative, confident)
 
 # OpenClaw gateway
 OPENCLAW_URL = "http://127.0.0.1:18789"
