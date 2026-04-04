@@ -56,11 +56,20 @@ def preload_greeting(api_key: str, voice_id: str = ELEVENLABS_VOICE_ID) -> None:
     _greeting_samples, _greeting_rate = _audio_to_samples(audio_bytes)
 
 
+def _wait_playback(samples: np.ndarray, rate: int):
+    """Wait for playback to finish, interruptible by Ctrl+C."""
+    import time
+    duration = len(samples) / rate
+    end = time.time() + duration + 0.1
+    while time.time() < end and sd.get_stream() and sd.get_stream().active:
+        time.sleep(0.05)
+
+
 def play_greeting() -> None:
     """Play the pre-cached 'Oui Monsieur' greeting instantly."""
     if _greeting_samples is not None:
         sd.play(_greeting_samples, samplerate=_greeting_rate)
-        sd.wait()
+        _wait_playback(_greeting_samples, _greeting_rate)
 
 
 def speak(text: str, api_key: str, voice_id: str = ELEVENLABS_VOICE_ID, wait: bool = True) -> None:
@@ -77,4 +86,4 @@ def speak(text: str, api_key: str, voice_id: str = ELEVENLABS_VOICE_ID, wait: bo
 
     sd.play(samples, samplerate=rate)
     if wait:
-        sd.wait()
+        _wait_playback(samples, rate)
