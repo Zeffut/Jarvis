@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Audio constants
 SAMPLE_RATE = 16000
 SILENCE_THRESHOLD = 0.01
-SILENCE_DURATION = 0.8
+SILENCE_DURATION = 0.5
 CONVERSATION_TIMEOUT = 5.0
 WHISPER_MODEL = "mlx-community/whisper-turbo"
 ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Adam (deep, authoritative, confident)
