@@ -24,7 +24,7 @@ class Assistant:
             "--output-format", "stream-json",
             "--verbose",
             "--dangerously-skip-permissions",
-            "--system-prompt", SYSTEM_PROMPT,
+            "--append-system-prompt", SYSTEM_PROMPT,
         ]
         if self.session_id:
             cmd.extend(["--resume", self.session_id])
