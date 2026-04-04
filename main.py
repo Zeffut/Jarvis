@@ -147,11 +147,29 @@ def conversation_loop(
             ui.show_user_text(final_text)
             ui.show_jarvis_start()
 
+            # Queue sentences for TTS in background thread
+            import queue
+            tts_queue: queue.Queue[str | None] = queue.Queue()
+
+            def tts_worker():
+                while True:
+                    sentence = tts_queue.get()
+                    if sentence is None:
+                        break
+                    speak(sentence, api_key=elevenlabs_key)
+
+            tts_thread = threading.Thread(target=tts_worker, daemon=True)
+            tts_thread.start()
+
             for event_type, text in assistant.ask_stream(final_text):
                 if event_type == TOKEN:
                     ui.show_jarvis_token(text)
                 elif event_type == SENTENCE:
-                    speak(text, api_key=elevenlabs_key)
+                    tts_queue.put(text)
+
+            # Wait for TTS to finish
+            tts_queue.put(None)
+            tts_thread.join()
 
             ui.show_jarvis_end()
             mic.reset()
