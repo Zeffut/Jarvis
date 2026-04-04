@@ -19,12 +19,16 @@ from speaker import speak, preload_greeting, play_greeting
 from audio import is_silent
 
 
-def record_and_transcribe(transcriber: Transcriber) -> str:
-    """Record audio until silence, then transcribe. Waits for speech first."""
+def record_and_transcribe(transcriber: Transcriber, timeout: float = 0) -> str:
+    """Record audio until silence, then transcribe. Waits for speech first.
+
+    If timeout > 0, returns empty string if no speech detected within timeout seconds.
+    """
     chunks: list[np.ndarray] = []
     silence_start: float | None = None
     speech_started = False
     recording = True
+    timed_out = False
 
     def audio_callback(indata, frames, time_info, status):
         nonlocal silence_start, recording, speech_started
@@ -47,6 +51,7 @@ def record_and_transcribe(transcriber: Transcriber) -> str:
             silence_start = None
 
     print("🎤 ...", end="", flush=True)
+    start_time = time.time()
     with sd.InputStream(
         samplerate=SAMPLE_RATE,
         channels=1,
@@ -56,6 +61,13 @@ def record_and_transcribe(transcriber: Transcriber) -> str:
     ):
         while recording:
             time.sleep(0.05)
+            if timeout > 0 and not speech_started and time.time() - start_time >= timeout:
+                timed_out = True
+                break
+
+    if timed_out or not chunks:
+        print("\r   ", end="\r")
+        return ""
 
     if not chunks:
         return ""
@@ -72,10 +84,15 @@ def conversation_loop(
     elevenlabs_key: str,
 ) -> None:
     """Run a conversation: record → transcribe → ask Claude (stream) → speak per sentence."""
+    first_turn = True
     while True:
-        text = record_and_transcribe(transcriber)
+        # First turn: no timeout (user just said "Jarvis")
+        # Follow-up turns: timeout after CONVERSATION_TIMEOUT seconds of no speech
+        timeout = 0 if first_turn else CONVERSATION_TIMEOUT
+        text = record_and_transcribe(transcriber, timeout=timeout)
+        first_turn = False
+
         if not text:
-            print("(rien entendu)")
             break
 
         print(f"\n🤖 ", end="", flush=True)
@@ -86,31 +103,6 @@ def conversation_loop(
             speak(sentence, api_key=elevenlabs_key)
 
         print()
-
-        # Wait for follow-up speech or timeout
-        print("⏳ En attente...")
-        silence_start = time.time()
-        heard_speech = False
-
-        def check_callback(indata, frames, time_info, status):
-            nonlocal silence_start, heard_speech
-            if not is_silent(indata[:, 0], SILENCE_THRESHOLD):
-                heard_speech = True
-
-        with sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            channels=1,
-            dtype="float32",
-            blocksize=int(SAMPLE_RATE * 0.1),
-            callback=check_callback,
-        ):
-            while time.time() - silence_start < CONVERSATION_TIMEOUT:
-                time.sleep(0.1)
-                if heard_speech:
-                    break
-
-        if not heard_speech:
-            break
 
     assistant.reset()
 
