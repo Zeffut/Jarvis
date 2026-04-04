@@ -17,7 +17,7 @@ SYSTEM_PROMPT = (
     "Tu parles en français. Tes réponses doivent être courtes car elles seront lues à voix haute."
 )
 
-REQUIRED_KEYS = ["ANTHROPIC_API_KEY", "PICOVOICE_ACCESS_KEY"]
+REQUIRED_KEYS = ["ANTHROPIC_API_KEY"]
 
 
 def load_config(env_path: str = ".env") -> dict:

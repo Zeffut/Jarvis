@@ -117,7 +117,7 @@ def main():
     transcriber = Transcriber()
 
     assistant = Assistant(api_key=cfg["anthropic_api_key"])
-    wake = WakeWordListener(access_key=cfg["picovoice_access_key"])
+    wake = WakeWordListener(transcriber=transcriber)
 
     try:
         while True:
