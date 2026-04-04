@@ -5,7 +5,8 @@ from config import SAMPLE_RATE
 
 def is_silent(audio_chunk: np.ndarray, threshold: float) -> bool:
     rms = np.sqrt(np.mean(audio_chunk**2))
-    return bool(rms < threshold)
+    # Add a small epsilon to handle float32 precision issues
+    return bool(rms < (threshold - 1e-8))
 
 
 def create_audio_stream(callback, sample_rate: int = SAMPLE_RATE) -> sd.InputStream:
