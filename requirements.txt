@@ -5,6 +5,5 @@ mlx-whisper==0.4.3
 soundfile==0.13.1
 elevenlabs==2.41.0
 pydub==0.25.1
-anthropic==0.52.0
 python-dotenv==1.1.0
 pytest==8.3.5

@@ -5,4 +5,8 @@ __pycache__/
 dist/
 build/
 .venv/
+.vscode/
+.pytest_cache/
 .greeting_cache.mp3
+test_wake.py
+test_transcribe.py
