@@ -24,6 +24,7 @@ def record_and_transcribe(transcriber: Transcriber) -> str:
     chunks: list[np.ndarray] = []
     silence_start: float | None = None
     recording = True
+    last_partial = ""
 
     def audio_callback(indata, frames, time_info, status):
         nonlocal silence_start, recording
@@ -45,7 +46,6 @@ def record_and_transcribe(transcriber: Transcriber) -> str:
         blocksize=int(SAMPLE_RATE * 0.1),
         callback=audio_callback,
     ):
-        # Real-time transcription display
         last_transcription_len = 0
         while recording:
             time.sleep(0.3)
@@ -53,12 +53,18 @@ def record_and_transcribe(transcriber: Transcriber) -> str:
                 audio_so_far = np.concatenate(chunks)
                 partial = transcriber.transcribe(audio_so_far)
                 if partial:
+                    last_partial = partial
                     print(f"\r💬 {partial}", end="", flush=True)
                 last_transcription_len = len(chunks)
 
-    # Final transcription
     if not chunks:
         return ""
+
+    # Use last partial if available, otherwise do final transcription
+    if last_partial:
+        print(f"\r💬 {last_partial}   ")
+        return last_partial
+
     full_audio = np.concatenate(chunks)
     final_text = transcriber.transcribe(full_audio)
     print(f"\r💬 {final_text}   ")
@@ -70,20 +76,24 @@ def conversation_loop(
     assistant: Assistant,
     elevenlabs_key: str,
 ) -> None:
-    """Run a conversation: record → transcribe → ask Claude → speak → repeat until timeout."""
+    """Run a conversation: record → transcribe → ask Claude (stream) → speak per sentence."""
     while True:
         text = record_and_transcribe(transcriber)
         if not text:
             print("(rien entendu)")
             break
 
-        print(f"\n🤖 Réflexion...")
-        reply = assistant.ask(text)
-        print(f"🤖 {reply}")
-        speak(reply, api_key=elevenlabs_key)
+        print(f"\n🤖 ", end="", flush=True)
+
+        # Stream Claude response and speak sentence by sentence
+        for sentence in assistant.ask_stream(text):
+            print(sentence, end=" ", flush=True)
+            speak(sentence, api_key=elevenlabs_key)
+
+        print()
 
         # Wait for follow-up speech or timeout
-        print("\n⏳ En attente...")
+        print("⏳ En attente...")
         silence_start = time.time()
         heard_speech = False
 
