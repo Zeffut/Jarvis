@@ -12,7 +12,7 @@ ELEVENLABS_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"  # Daniel (British, deep, butler-li
 
 # OpenClaw gateway
 OPENCLAW_URL = "http://127.0.0.1:18789"
-OPENCLAW_TOKEN = "f43851fd97814a2b6126cc43f4fa7b4557c01ae65bf08928"
+OPENCLAW_TOKEN = "c51f3644e24774924c3535ba36692f8c13e6bd5fd0caa062"
 
 SYSTEM_PROMPT = (
     "Tu es Jarvis, l'assistant vocal intelligent. "
