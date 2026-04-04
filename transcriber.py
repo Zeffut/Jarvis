@@ -12,8 +12,6 @@ class Transcriber:
             audio,
             language="fr",
             beam_size=5,
-            initial_prompt="Jarvis, l'assistant vocal.",
-            hotwords="Jarvis",
         )
         text = "".join(seg.text for seg in segments).strip()
         return text
