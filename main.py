@@ -20,11 +20,10 @@ from audio import is_silent
 
 
 def record_and_transcribe(transcriber: Transcriber) -> str:
-    """Record audio until silence, with real-time transcription display."""
+    """Record audio until silence, then transcribe."""
     chunks: list[np.ndarray] = []
     silence_start: float | None = None
     recording = True
-    last_partial = ""
 
     def audio_callback(indata, frames, time_info, status):
         nonlocal silence_start, recording
@@ -39,6 +38,7 @@ def record_and_transcribe(transcriber: Transcriber) -> str:
         else:
             silence_start = None
 
+    print("🎤 ...", end="", flush=True)
     with sd.InputStream(
         samplerate=SAMPLE_RATE,
         channels=1,
@@ -46,24 +46,11 @@ def record_and_transcribe(transcriber: Transcriber) -> str:
         blocksize=int(SAMPLE_RATE * 0.1),
         callback=audio_callback,
     ):
-        last_transcription_len = 0
         while recording:
-            time.sleep(0.3)
-            if len(chunks) > last_transcription_len + 3:
-                audio_so_far = np.concatenate(chunks)
-                partial = transcriber.transcribe(audio_so_far)
-                if partial:
-                    last_partial = partial
-                    print(f"\r💬 {partial}", end="", flush=True)
-                last_transcription_len = len(chunks)
+            time.sleep(0.05)
 
     if not chunks:
         return ""
-
-    # Use last partial if available, otherwise do final transcription
-    if last_partial:
-        print(f"\r💬 {last_partial}   ")
-        return last_partial
 
     full_audio = np.concatenate(chunks)
     final_text = transcriber.transcribe(full_audio)
