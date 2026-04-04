@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Generator
-import requests
+import subprocess
 import json
+from typing import Generator
 
 from config import SYSTEM_PROMPT
 
@@ -12,95 +12,92 @@ SENTENCE = "sentence"  # Send to TTS
 
 
 class Assistant:
-    def __init__(self, base_url: str, auth_token: str):
-        self.base_url = base_url.rstrip("/")
-        self.auth_token = auth_token
-        self.history: list[dict] = []
+    def __init__(self, model: str = "haiku"):
+        self.model = model
+        self.session_id: str | None = None
 
-    def _headers(self) -> dict:
-        return {
-            "Authorization": f"Bearer {self.auth_token}",
-            "Content-Type": "application/json",
-        }
-
-    def ask(self, text: str) -> str:
-        self.history.append({"role": "user", "content": text})
-
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + list(self.history)
-
-        resp = requests.post(
-            f"{self.base_url}/v1/chat/completions",
-            headers=self._headers(),
-            json={
-                "model": "openclaw/default",
-                "messages": messages,
-                "max_tokens": 150,
-                "stream": False,
-            },
-            timeout=120,
-        )
-        resp.raise_for_status()
-        reply = resp.json()["choices"][0]["message"]["content"]
-        self.history.append({"role": "assistant", "content": reply})
-        return reply
+    def _build_cmd(self, text: str) -> list[str]:
+        cmd = [
+            "claude",
+            "-p", text,
+            "--model", self.model,
+            "--output-format", "stream-json",
+            "--verbose",
+            "--bare",
+            "--system-prompt", SYSTEM_PROMPT,
+        ]
+        if self.session_id:
+            cmd.extend(["--resume", self.session_id])
+        return cmd
 
     def ask_stream(self, text: str) -> Generator[tuple[str, str], None, None]:
-        """Stream response: yields (type, text) where type is TOKEN or SENTENCE."""
-        self.history.append({"role": "user", "content": text})
+        """Stream response via Claude Code CLI."""
+        cmd = self._build_cmd(text)
 
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + list(self.history)
-
-        resp = requests.post(
-            f"{self.base_url}/v1/chat/completions",
-            headers=self._headers(),
-            json={
-                "model": "openclaw/default",
-                "messages": messages,
-                "max_tokens": 150,
-                "stream": True,
-            },
-            stream=True,
-            timeout=120,
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
-        resp.raise_for_status()
 
         full_reply = ""
         sentence_buffer = ""
+        last_text_len = 0
 
-        for line in resp.iter_lines():
+        for line in proc.stdout:
+            line = line.strip()
             if not line:
                 continue
-            line = line.decode("utf-8")
-            if not line.startswith("data: "):
-                continue
-            data = line[6:]
-            if data == "[DONE]":
-                break
 
-            chunk = json.loads(data)
-            delta = chunk.get("choices", [{}])[0].get("delta", {})
-            token = delta.get("content", "")
-            if not token:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
                 continue
 
-            full_reply += token
-            sentence_buffer += token
+            # Capture session ID
+            if event.get("type") == "system" and "session_id" in event:
+                self.session_id = event["session_id"]
 
-            yield TOKEN, token
+            # Extract text from assistant messages (incremental)
+            if event.get("type") == "assistant":
+                message = event.get("message", {})
+                for block in message.get("content", []):
+                    if block.get("type") == "text":
+                        full_text = block.get("text", "")
+                        # Only yield the new part
+                        new_text = full_text[last_text_len:]
+                        last_text_len = len(full_text)
 
-            for sep in [".", "!", "?", "\n"]:
-                if sep in sentence_buffer:
-                    parts = sentence_buffer.split(sep, 1)
-                    sentence = (parts[0] + sep).strip()
-                    sentence_buffer = parts[1]
-                    if sentence:
-                        yield SENTENCE, sentence
-                    break
+                        if not new_text:
+                            continue
+
+                        full_reply += new_text
+                        sentence_buffer += new_text
+
+                        yield TOKEN, new_text
+
+                        for sep in [".", "!", "?", "\n"]:
+                            if sep in sentence_buffer:
+                                parts = sentence_buffer.split(sep, 1)
+                                sentence = (parts[0] + sep).strip()
+                                sentence_buffer = parts[1]
+                                if sentence:
+                                    yield SENTENCE, sentence
+                                break
+
+            # Handle result type (final message)
+            if event.get("type") == "result":
+                result_text = event.get("result", "")
+                if result_text and not full_reply:
+                    full_reply = result_text
+                    yield TOKEN, result_text
+                    yield SENTENCE, result_text
+
+        proc.wait()
 
         if sentence_buffer.strip():
             yield SENTENCE, sentence_buffer.strip()
 
-        self.history.append({"role": "assistant", "content": full_reply})
-
     def reset(self) -> None:
-        self.history.clear()
+        self.session_id = None
