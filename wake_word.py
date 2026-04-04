@@ -2,77 +2,42 @@ from __future__ import annotations
 
 import numpy as np
 import sounddevice as sd
+import openwakeword
+from openwakeword.model import Model
 
-from audio import is_silent
-from config import SAMPLE_RATE, SILENCE_THRESHOLD
+from config import SAMPLE_RATE
 
 
-WAKE_WORD = "jarvis"
-# Listen in 0.5s chunks, accumulate up to 3s of speech before checking
-CHUNK_DURATION = 0.5
-MAX_LISTEN_SECONDS = 3.0
-# Silence after speech to trigger transcription
-WAKE_SILENCE_DURATION = 0.6
+# openwakeword expects 16kHz, 16-bit, mono audio in 80ms chunks (1280 samples)
+OWW_CHUNK_SIZE = 1280
+DETECTION_THRESHOLD = 0.5
 
 
 class WakeWordListener:
-    def __init__(self, transcriber):
-        self.transcriber = transcriber
+    def __init__(self):
+        openwakeword.utils.download_models(["hey_jarvis_v0.1"])
+        self.model = Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
 
     def listen(self) -> None:
-        """Block until 'Jarvis' is detected via Whisper."""
-        print("\n�� En écoute...")
+        """Block until 'Hey Jarvis' is detected."""
+        print("\n🟢 En écoute... (dis 'Hey Jarvis')")
+        self.model.reset()
 
-        chunk_size = int(SAMPLE_RATE * CHUNK_DURATION)
+        with sd.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=1,
+            dtype="int16",
+            blocksize=OWW_CHUNK_SIZE,
+        ) as stream:
+            while True:
+                audio_frame, _ = stream.read(OWW_CHUNK_SIZE)
+                pcm = audio_frame.flatten()
+                prediction = self.model.predict(pcm)
 
-        while True:
-            # Wait for speech (non-silent audio)
-            with sd.InputStream(
-                samplerate=SAMPLE_RATE,
-                channels=1,
-                dtype="float32",
-                blocksize=chunk_size,
-            ) as stream:
-                while True:
-                    audio_frame, _ = stream.read(chunk_size)
-                    if not is_silent(audio_frame[:, 0], SILENCE_THRESHOLD):
-                        break
-
-            # Speech detected — record until silence
-            chunks: list[np.ndarray] = []
-            silence_start: float | None = None
-
-            import time
-
-            with sd.InputStream(
-                samplerate=SAMPLE_RATE,
-                channels=1,
-                dtype="float32",
-                blocksize=chunk_size,
-            ) as stream:
-                start = time.time()
-                while time.time() - start < MAX_LISTEN_SECONDS:
-                    audio_frame, _ = stream.read(chunk_size)
-                    chunk = audio_frame[:, 0].copy()
-                    chunks.append(chunk)
-
-                    if is_silent(chunk, SILENCE_THRESHOLD):
-                        if silence_start is None:
-                            silence_start = time.time()
-                        elif time.time() - silence_start >= WAKE_SILENCE_DURATION:
-                            break
-                    else:
-                        silence_start = None
-
-            if not chunks:
-                continue
-
-            audio = np.concatenate(chunks)
-            text = self.transcriber.transcribe(audio).lower()
-
-            if WAKE_WORD in text:
-                print("🎙️  Je vous écoute...")
-                return
+                for wake_word, score in prediction.items():
+                    if score > DETECTION_THRESHOLD:
+                        print("🎙️  Je vous écoute...")
+                        return
 
     def cleanup(self) -> None:
         pass

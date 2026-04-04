@@ -1,17 +1,18 @@
-from unittest.mock import MagicMock
+from unittest.mock import patch, MagicMock
 
 
 def test_wake_word_listener_init():
-    from wake_word import WakeWordListener
-
-    mock_transcriber = MagicMock()
-    listener = WakeWordListener(transcriber=mock_transcriber)
-    assert listener.transcriber == mock_transcriber
+    with patch("wake_word.openwakeword") as mock_oww:
+        with patch("wake_word.Model") as mock_model_cls:
+            from wake_word import WakeWordListener
+            listener = WakeWordListener()
+            mock_oww.utils.download_models.assert_called_once()
+            mock_model_cls.assert_called_once()
 
 
 def test_wake_word_listener_cleanup():
-    from wake_word import WakeWordListener
-
-    mock_transcriber = MagicMock()
-    listener = WakeWordListener(transcriber=mock_transcriber)
-    listener.cleanup()  # should not raise
+    with patch("wake_word.openwakeword"):
+        with patch("wake_word.Model"):
+            from wake_word import WakeWordListener
+            listener = WakeWordListener()
+            listener.cleanup()  # should not raise

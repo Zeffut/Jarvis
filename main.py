@@ -117,7 +117,9 @@ def main():
     transcriber = Transcriber()
 
     assistant = Assistant(api_key=cfg["anthropic_api_key"])
-    wake = WakeWordListener(transcriber=transcriber)
+
+    print("📦 Chargement du modèle wake word...")
+    wake = WakeWordListener()
 
     try:
         while True:
