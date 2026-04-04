@@ -1,6 +1,8 @@
 sounddevice==0.5.1
 numpy==1.26.4
 faster-whisper==1.1.1
+mlx-whisper==0.4.3
+soundfile==0.13.1
 elevenlabs==2.41.0
 pydub==0.25.1
 anthropic==0.52.0

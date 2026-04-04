@@ -7,7 +7,7 @@ SAMPLE_RATE = 16000
 SILENCE_THRESHOLD = 0.01
 SILENCE_DURATION = 1.5
 CONVERSATION_TIMEOUT = 5.0
-WHISPER_MODEL = "turbo"
+WHISPER_MODEL = "mlx-community/whisper-turbo"
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 ELEVENLABS_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"  # Daniel (British, deep, butler-like)
 
