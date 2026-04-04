@@ -15,7 +15,7 @@ from config import (
 from wake_word import WakeWordListener
 from transcriber import Transcriber
 from assistant import Assistant
-from speaker import speak
+from speaker import speak, preload_greeting, play_greeting
 from audio import is_silent
 
 
@@ -122,9 +122,13 @@ def main():
     print("📦 Chargement du modèle wake word...")
     wake = WakeWordListener()
 
+    print("🔊 Pré-chargement de la voix...")
+    preload_greeting(api_key=cfg["elevenlabs_api_key"])
+
     try:
         while True:
             wake.listen()
+            play_greeting()
             conversation_loop(transcriber, assistant, cfg["elevenlabs_api_key"])
     except KeyboardInterrupt:
         print("\n👋 Jarvis s'éteint.")

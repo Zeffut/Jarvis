@@ -21,4 +21,4 @@ def test_speak_calls_elevenlabs():
         mock_client.text_to_speech.convert.assert_called_once()
         call_kwargs = mock_client.text_to_speech.convert.call_args[1]
         assert call_kwargs["text"] == "Bonjour"
-        assert call_kwargs["model_id"] == "eleven_multilingual_v2"
+        assert call_kwargs["model_id"] == "eleven_turbo_v2_5"
