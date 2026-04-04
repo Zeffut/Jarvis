@@ -8,7 +8,7 @@ from audio import is_silent
 from config import SAMPLE_RATE, SILENCE_THRESHOLD
 
 
-WAKE_WORD = "jarvis"
+WAKE_VARIANTS = {"jarvis", "j'avis", "jarvisse", "gervis", "jarvi", "chavis", "gervais", "j'arrive"}
 CHUNK_SAMPLES = int(SAMPLE_RATE * 0.3)  # 300ms chunks
 MAX_RECORD_SECONDS = 2.5
 WAKE_SILENCE_DURATION = 0.4
@@ -57,7 +57,7 @@ class WakeWordListener:
                 audio = np.concatenate(chunks)
                 text = self.transcriber.transcribe(audio).lower()
 
-                if WAKE_WORD in text:
+                if any(v in text for v in WAKE_VARIANTS):
                     print("🎙️  Je vous écoute...")
                     return
 

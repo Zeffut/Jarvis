@@ -8,6 +8,12 @@ class Transcriber:
         self.model = WhisperModel(model_size, compute_type="auto")
 
     def transcribe(self, audio: np.ndarray) -> str:
-        segments, _ = self.model.transcribe(audio, language="fr", beam_size=5)
+        segments, _ = self.model.transcribe(
+            audio,
+            language="fr",
+            beam_size=5,
+            initial_prompt="Jarvis, l'assistant vocal.",
+            hotwords="Jarvis",
+        )
         text = "".join(seg.text for seg in segments).strip()
         return text
