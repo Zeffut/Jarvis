@@ -23,6 +23,8 @@ from config import (
     SILENCE_THRESHOLD,
     SILENCE_DURATION,
     CONVERSATION_TIMEOUT,
+    OPENCLAW_URL,
+    OPENCLAW_TOKEN,
 )
 from wake_word import WakeWordListener
 from transcriber import Transcriber
@@ -186,8 +188,8 @@ def main():
     ui.show_loading("Modele Whisper...")
     transcriber = Transcriber()
 
-    ui.show_loading("Intelligence artificielle...")
-    assistant = Assistant(api_key=cfg["anthropic_api_key"])
+    ui.show_loading("OpenClaw...")
+    assistant = Assistant(base_url=OPENCLAW_URL, auth_token=OPENCLAW_TOKEN)
 
     ui.show_loading("Detection vocale...")
     wake = WakeWordListener()

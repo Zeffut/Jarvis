@@ -8,8 +8,11 @@ SILENCE_THRESHOLD = 0.01
 SILENCE_DURATION = 1.5
 CONVERSATION_TIMEOUT = 5.0
 WHISPER_MODEL = "mlx-community/whisper-turbo"
-CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 ELEVENLABS_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"  # Daniel (British, deep, butler-like)
+
+# OpenClaw gateway
+OPENCLAW_URL = "http://127.0.0.1:18789"
+OPENCLAW_TOKEN = "f43851fd97814a2b6126cc43f4fa7b4557c01ae65bf08928"
 
 SYSTEM_PROMPT = (
     "Tu es Jarvis, l'assistant vocal intelligent. "
@@ -17,7 +20,7 @@ SYSTEM_PROMPT = (
     "Tu parles en français. Tes réponses doivent être courtes car elles seront lues à voix haute."
 )
 
-REQUIRED_KEYS = ["ANTHROPIC_API_KEY", "ELEVENLABS_API_KEY"]
+REQUIRED_KEYS = ["ELEVENLABS_API_KEY"]
 
 
 def load_config(env_path: str = ".env") -> dict:
