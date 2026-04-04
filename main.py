@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import time
+import threading
 import numpy as np
 import sounddevice as sd
 
@@ -19,63 +20,60 @@ from speaker import speak, preload_greeting, play_greeting
 from audio import is_silent
 
 
-def record_and_transcribe(transcriber: Transcriber, timeout: float = 0) -> str:
-    """Record audio until silence, then transcribe. Waits for speech first.
+class MicBuffer:
+    """Keeps the mic open and buffers audio continuously."""
 
-    If timeout > 0, returns empty string if no speech detected within timeout seconds.
-    """
-    chunks: list[np.ndarray] = []
-    silence_start: float | None = None
-    speech_started = False
-    recording = True
-    timed_out = False
+    def __init__(self):
+        self.chunks: list[np.ndarray] = []
+        self.speech_started = False
+        self.silence_start: float | None = None
+        self.done = False
+        self._lock = threading.Lock()
 
-    def audio_callback(indata, frames, time_info, status):
-        nonlocal silence_start, recording, speech_started
+    def callback(self, indata, frames, time_info, status):
         chunk = indata[:, 0].copy()
 
-        if not speech_started:
-            if not is_silent(chunk, SILENCE_THRESHOLD):
-                speech_started = True
-                chunks.append(chunk)
-            return
+        with self._lock:
+            if not self.speech_started:
+                if not is_silent(chunk, SILENCE_THRESHOLD):
+                    self.speech_started = True
+                    self.chunks.append(chunk)
+                return
 
-        chunks.append(chunk)
+            self.chunks.append(chunk)
 
-        if is_silent(chunk, SILENCE_THRESHOLD):
-            if silence_start is None:
-                silence_start = time.time()
-            elif time.time() - silence_start >= SILENCE_DURATION:
-                recording = False
-        else:
-            silence_start = None
+            if is_silent(chunk, SILENCE_THRESHOLD):
+                if self.silence_start is None:
+                    self.silence_start = time.time()
+                elif time.time() - self.silence_start >= SILENCE_DURATION:
+                    self.done = True
+            else:
+                self.silence_start = None
 
-    print("🎤 ...", end="", flush=True)
-    start_time = time.time()
-    with sd.InputStream(
-        samplerate=SAMPLE_RATE,
-        channels=1,
-        dtype="float32",
-        blocksize=int(SAMPLE_RATE * 0.1),
-        callback=audio_callback,
-    ):
-        while recording:
+    def reset(self):
+        with self._lock:
+            self.chunks.clear()
+            self.speech_started = False
+            self.silence_start = None
+            self.done = False
+
+    def wait_for_speech(self, timeout: float = 0) -> str | None:
+        """Wait until speech is recorded and silence detected. Returns None on timeout."""
+        start = time.time()
+        while not self.done:
             time.sleep(0.05)
-            if timeout > 0 and not speech_started and time.time() - start_time >= timeout:
-                timed_out = True
-                break
+            if timeout > 0 and not self.speech_started and time.time() - start >= timeout:
+                return None
+        with self._lock:
+            if not self.chunks:
+                return None
+            return "ok"
 
-    if timed_out or not chunks:
-        print("\r   ", end="\r")
-        return ""
-
-    if not chunks:
-        return ""
-
-    full_audio = np.concatenate(chunks)
-    final_text = transcriber.transcribe(full_audio)
-    print(f"\r💬 {final_text}   ")
-    return final_text
+    def get_audio(self) -> np.ndarray | None:
+        with self._lock:
+            if not self.chunks:
+                return None
+            return np.concatenate(self.chunks)
 
 
 def conversation_loop(
@@ -83,29 +81,50 @@ def conversation_loop(
     assistant: Assistant,
     elevenlabs_key: str,
 ) -> None:
-    """Run a conversation: record → transcribe → ask Claude (stream) → speak per sentence."""
-    first_turn = True
-    while True:
-        # First turn: no timeout (user just said "Jarvis")
-        # Follow-up turns: timeout after CONVERSATION_TIMEOUT seconds of no speech
-        timeout = 0 if first_turn else CONVERSATION_TIMEOUT
-        text = record_and_transcribe(transcriber, timeout=timeout)
-        first_turn = False
+    """Conversation with mic always open."""
+    mic = MicBuffer()
 
-        if not text:
-            break
+    with sd.InputStream(
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype="float32",
+        blocksize=int(SAMPLE_RATE * 0.1),
+        callback=mic.callback,
+    ):
+        first_turn = True
+        while True:
+            timeout = 0 if first_turn else CONVERSATION_TIMEOUT
+            print("🎤 ...", end="", flush=True)
 
-        print(f"\n🤖 ", end="", flush=True)
+            result = mic.wait_for_speech(timeout=timeout)
+            first_turn = False
 
-        # Stream Claude response and speak sentence by sentence
-        # Last sentence plays without waiting so mic can open immediately
-        sentences = list(assistant.ask_stream(text))
-        for i, sentence in enumerate(sentences):
-            print(sentence, end=" ", flush=True)
-            is_last = i == len(sentences) - 1
-            speak(sentence, api_key=elevenlabs_key, wait=not is_last)
+            if result is None:
+                print("\r   ", end="\r")
+                break
 
-        print()
+            audio = mic.get_audio()
+            if audio is None:
+                break
+
+            final_text = transcriber.transcribe(audio)
+            print(f"\r💬 {final_text}   ")
+
+            if not final_text:
+                break
+
+            print(f"🤖 ", end="", flush=True)
+
+            # Stream Claude response and speak sentence by sentence
+            # Mic stays open — captures user speech as soon as TTS ends
+            for sentence in assistant.ask_stream(final_text):
+                print(sentence, end=" ", flush=True)
+                speak(sentence, api_key=elevenlabs_key)
+
+            print()
+
+            # Reset mic buffer for next turn — mic is still open
+            mic.reset()
 
     assistant.reset()
 
