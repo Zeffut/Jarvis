@@ -152,6 +152,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     private var targetEnergy: Float = 0.05
     private var time: Float = 0
 
+    // Burst transitoire pour les animations d'apparition / disparition
+    private var transientBoost: Float = 0.0   // valeur courante (décroît vers 0)
+    private var transientDecay: Float = 0.0   // vitesse de décroissance par frame
+
     init?(mtkView: MTKView) {
         guard
             let device = mtkView.device,
@@ -201,6 +205,18 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         super.init()
     }
 
+    /// Burst de particules à l'apparition de la fenêtre.
+    func triggerAppear() {
+        transientBoost = 1.4
+        transientDecay = 0.032   // ~45 frames pour retomber à 0
+    }
+
+    /// Implosion douce à la disparition.
+    func triggerDisappear() {
+        transientBoost = 0.6
+        transientDecay = 0.055   // ~11 frames, fenêtre se ferme vite
+    }
+
     /// Appelé par AppDelegate quand un message socket arrive.
     func setState(_ state: String, amplitude: Float) {
         currentState = state
@@ -225,6 +241,11 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     func draw(in view: MTKView) {
         time += 1.0 / 60.0
 
+        // Décroissance du burst transitoire
+        if transientBoost > 0 {
+            transientBoost = max(0, transientBoost - transientDecay)
+        }
+
         // Interpolation plus réactive pendant listening/speaking
         let lerpSpeed: Float = (currentState == "listening" || currentState == "speaking") ? 0.07 : 0.04
         energy += (targetEnergy - energy) * lerpSpeed
@@ -245,7 +266,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         // (drawableSize varie selon la densité Retina, bounds.size×2 = référence stable)
         var uniforms = Uniforms(
             time: time,
-            energy: energy,
+            energy: min(1.5, energy + transientBoost),
             rotationSpeed: rotSpeed,
             viewWidth: Float(view.bounds.size.width) * 2.0,
             viewHeight: Float(view.bounds.size.height) * 2.0,
