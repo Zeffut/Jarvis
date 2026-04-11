@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import json
+import os
 import threading
 from typing import Generator
 
@@ -12,81 +13,73 @@ TOKEN = "token"
 SENTENCE = "sentence"
 TOOL_USE = "tool_use"
 
+_CREDIT_ERROR = "credit balance is too low"
+
 
 class Assistant:
-    def __init__(self, model: str = "haiku"):
+    def __init__(self, model: str = "sonnet"):
         self.model = model
-        self.proc: subprocess.Popen | None = None
-        self._reader_lines: list[str] = []
-        self._reader_lock = threading.Lock()
-        self._reader_thread: threading.Thread | None = None
-        self._start_process()
+        self._session_id: str | None = None  # en mémoire uniquement
 
-    def _start_process(self):
-        """Start a persistent Claude Code process."""
+    def _build_cmd(self, text: str, session_id: str | None = None) -> list[str]:
         cmd = [
-            "claude",
-            "-p",
+            "claude", "-p", text,
             "--model", self.model,
-            "--input-format", "stream-json",
             "--output-format", "stream-json",
             "--verbose",
             "--dangerously-skip-permissions",
             "--append-system-prompt", SYSTEM_PROMPT,
         ]
-        self.proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-        # Start background reader thread
-        self._reader_lines = []
-        self._reader_thread = threading.Thread(target=self._read_stdout, daemon=True)
-        self._reader_thread.start()
+        if session_id:
+            cmd += ["--resume", session_id]
+        return cmd
 
-    def _read_stdout(self):
-        """Continuously read stdout lines into buffer."""
-        for line in self.proc.stdout:
-            line = line.strip()
-            if line:
-                with self._reader_lock:
-                    self._reader_lines.append(line)
-
-    def _get_lines(self) -> list[str]:
-        with self._reader_lock:
-            lines = self._reader_lines.copy()
-            self._reader_lines.clear()
-        return lines
-
-    def _send_message(self, text: str):
-        """Send a user message via stdin."""
-        msg = json.dumps({"type": "user_message", "content": text})
-        self.proc.stdin.write(msg + "\n")
-        self.proc.stdin.flush()
-
-    def ask_stream(self, text: str) -> Generator[tuple[str, str], None, None]:
-        """Send message and stream response tokens."""
+    def _run(self, text: str, session_id: str | None) -> Generator[tuple[str, str], None, None]:
         import time
 
-        # Restart process if dead
-        if self.proc is None or self.proc.poll() is not None:
-            self._start_process()
+        env = os.environ.copy()
+        env.pop("ANTHROPIC_API_KEY", None)
 
-        # Clear any pending output
-        self._get_lines()
+        cmd = self._build_cmd(text, session_id)
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
 
-        self._send_message(text)
+        lines_buf: list[str] = []
+        lock = threading.Lock()
+
+        def reader():
+            for line in proc.stdout:
+                line = line.strip()
+                if line:
+                    with lock:
+                        lines_buf.append(line)
+
+        threading.Thread(target=reader, daemon=True).start()
 
         full_reply = ""
         sentence_buffer = ""
         last_text_len = 0
         got_result = False
+        new_session_id: str | None = None
+        deadline = time.time() + 120
 
         while not got_result:
+            if proc.poll() is not None and not lines_buf:
+                break
+            if time.time() > deadline:
+                proc.terminate()
+                break
+
             time.sleep(0.05)
-            lines = self._get_lines()
+
+            with lock:
+                lines = lines_buf.copy()
+                lines_buf.clear()
 
             for line in lines:
                 try:
@@ -94,30 +87,38 @@ class Assistant:
                 except json.JSONDecodeError:
                     continue
 
-                # Extract incremental text from assistant messages
-                if event.get("type") == "assistant":
-                    message = event.get("message", {})
-                    for block in message.get("content", []):
+                etype = event.get("type")
+
+                # Capturer le session_id pour la prochaine requête
+                if etype in ("system", "result"):
+                    sid = event.get("session_id") or event.get("sessionId")
+                    if sid:
+                        new_session_id = sid
+
+                if etype == "assistant":
+                    for block in event.get("message", {}).get("content", []):
                         if block.get("type") == "tool_use":
                             tool_name = block.get("name", "")
                             tool_input = block.get("input", {})
-                            desc = tool_input.get("description", "") or tool_input.get("command", "") or ""
+                            desc = (
+                                tool_input.get("description", "")
+                                or tool_input.get("command", "")
+                                or ""
+                            )
                             yield TOOL_USE, json.dumps({"name": tool_name, "description": desc})
 
                         if block.get("type") == "text":
                             full_text = block.get("text", "")
                             new_text = full_text[last_text_len:]
                             last_text_len = len(full_text)
-
                             if not new_text:
                                 continue
 
                             full_reply += new_text
                             sentence_buffer += new_text
-
                             yield TOKEN, new_text
 
-                            for sep in [".", "!", "?", "\n"]:
+                            for sep in (".", "!", "?", "\n"):
                                 if sep in sentence_buffer:
                                     parts = sentence_buffer.split(sep, 1)
                                     sentence = (parts[0] + sep).strip()
@@ -126,29 +127,46 @@ class Assistant:
                                         yield SENTENCE, sentence
                                     break
 
-                # End of turn
-                if event.get("type") == "result":
+                if etype == "result":
                     got_result = True
-                    # Reset text tracking for next message
                     last_text_len = 0
-
-                    # Handle case where result has text but nothing was streamed
                     result_text = event.get("result", "")
                     if result_text and not full_reply:
                         full_reply = result_text
                         yield TOKEN, result_text
                         sentence_buffer += result_text
 
+        proc.wait()
+
         if sentence_buffer.strip():
             yield SENTENCE, sentence_buffer.strip()
 
-    def reset(self) -> None:
-        """Kill the process and start fresh for a new conversation."""
-        if self.proc and self.proc.poll() is None:
-            self.proc.terminate()
-            self.proc.wait()
-        self.proc = None
-        self._reader_lines = []
+        # Retourner (session_id, full_reply) via attributs après yield
+        self._last_session_id = new_session_id
+        self._last_reply = full_reply
 
-    def __del__(self):
-        self.reset()
+    def ask_stream(self, text: str) -> Generator[tuple[str, str], None, None]:
+        """Stream la réponse. Gère le fallback si --resume casse les MCP."""
+        self._last_session_id = None
+        self._last_reply = ""
+
+        events = list(self._run(text, self._session_id))
+
+        # Détecter l'erreur de crédit après coup
+        full = self._last_reply.lower()
+        if _CREDIT_ERROR in full and self._session_id:
+            # Session corrompue → retry sans --resume
+            self._session_id = None
+            self._last_session_id = None
+            self._last_reply = ""
+            events = list(self._run(text, None))
+
+        # Mettre à jour la session pour le prochain message
+        if self._last_session_id:
+            self._session_id = self._last_session_id
+
+        yield from events
+
+    def reset(self, clear_session: bool = False) -> None:
+        if clear_session:
+            self._session_id = None
