@@ -241,12 +241,14 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
                             : currentState == "thinking"  ? 0.08
                             : 0.06
 
+        // Utiliser bounds×2 pour une taille identique sur tous les écrans
+        // (drawableSize varie selon la densité Retina, bounds.size×2 = référence stable)
         var uniforms = Uniforms(
             time: time,
             energy: energy,
             rotationSpeed: rotSpeed,
-            viewWidth: Float(view.bounds.size.width),
-            viewHeight: Float(view.bounds.size.height),
+            viewWidth: Float(view.bounds.size.width) * 2.0,
+            viewHeight: Float(view.bounds.size.height) * 2.0,
             stateMode: stateMode
         )
 
