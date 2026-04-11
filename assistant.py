@@ -146,26 +146,19 @@ class Assistant:
         self._last_reply = full_reply
 
     def ask_stream(self, text: str) -> Generator[tuple[str, str], None, None]:
-        """Stream la réponse. Gère le fallback si --resume casse les MCP."""
+        """Stream la réponse en temps réel. Gère le fallback crédit après coup."""
         self._last_session_id = None
         self._last_reply = ""
 
-        events = list(self._run(text, self._session_id))
+        yield from self._run(text, self._session_id)
 
-        # Détecter l'erreur de crédit après coup
+        # Post-stream : détecter erreur crédit ou mettre à jour la session
         full = self._last_reply.lower()
         if _CREDIT_ERROR in full and self._session_id:
-            # Session corrompue → retry sans --resume
+            # Session corrompue → reset pour le prochain appel (pas de retry mid-stream)
             self._session_id = None
-            self._last_session_id = None
-            self._last_reply = ""
-            events = list(self._run(text, None))
-
-        # Mettre à jour la session pour le prochain message
-        if self._last_session_id:
+        elif self._last_session_id:
             self._session_id = self._last_session_id
-
-        yield from events
 
     def reset(self, clear_session: bool = False) -> None:
         if clear_session:
