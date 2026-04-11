@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import os
 import subprocess
 import warnings
@@ -89,3 +90,18 @@ def speak(text: str, wait: bool = True) -> None:
     sd.play(samples, samplerate=KOKORO_SAMPLE_RATE)
     if wait:
         sd.wait()
+
+
+def cleanup() -> None:
+    """Libère les ressources TTS à l'exit."""
+    global _kokoro, _status_proc
+    if _status_proc and _status_proc.poll() is None:
+        _status_proc.terminate()
+        try:
+            _status_proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            _status_proc.kill()
+    _kokoro = None
+
+
+atexit.register(cleanup)

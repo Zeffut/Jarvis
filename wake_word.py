@@ -14,13 +14,16 @@ CHUNK_SAMPLES = int(SAMPLE_RATE * 0.1)  # 100ms chunks
 BUFFER_SECONDS = 1.5
 BUFFER_SAMPLES = int(SAMPLE_RATE * BUFFER_SECONDS)
 TRANSCRIBE_INTERVAL = 0.3  # transcribe every 300ms
+LISTEN_TIMEOUT = 300.0     # 5 min max — évite boucle infinie si le modèle crash
 
 
 class WakeWordListener:
     def __init__(self):
-        self.model = WhisperModel("tiny", compute_type="auto")
+        self.model: WhisperModel | None = WhisperModel("tiny", compute_type="auto")
 
     def _transcribe(self, audio: np.ndarray) -> str:
+        if self.model is None:
+            return ""
         segments, _ = self.model.transcribe(
             audio,
             language="fr",
@@ -32,16 +35,14 @@ class WakeWordListener:
 
     def listen(self) -> None:
         """Block until 'Jarvis' is detected using rolling buffer."""
-        # UI handled by main.py
-
         buffer = np.zeros(BUFFER_SAMPLES, dtype=np.float32)
         has_speech = False
         last_transcribe = 0.0
+        deadline = time.time() + LISTEN_TIMEOUT
 
         def callback(indata, frames, time_info, status):
             nonlocal buffer, has_speech
             chunk = indata[:, 0]
-            # Shift buffer left and append new audio
             buffer[:-len(chunk)] = buffer[len(chunk):]
             buffer[-len(chunk):] = chunk
             if not is_silent(chunk, SILENCE_THRESHOLD):
@@ -56,8 +57,12 @@ class WakeWordListener:
         ):
             while True:
                 time.sleep(0.05)
-                now = time.time()
 
+                if time.time() > deadline:
+                    # Timeout de sécurité — relancer le cycle
+                    deadline = time.time() + LISTEN_TIMEOUT
+
+                now = time.time()
                 if has_speech and now - last_transcribe >= TRANSCRIBE_INTERVAL:
                     has_speech = False
                     last_transcribe = now
@@ -67,4 +72,5 @@ class WakeWordListener:
                         return
 
     def cleanup(self) -> None:
-        pass
+        """Libère le modèle Whisper tiny de la mémoire."""
+        self.model = None

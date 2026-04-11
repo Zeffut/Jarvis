@@ -47,6 +47,10 @@ final class SocketListener {
             }
         }
         guard bindResult == 0 else { return }
+
+        // Restreindre l'accès au propriétaire uniquement (évite injection externe)
+        fchmod(serverFd, 0o600)
+
         listen(serverFd, 10)
 
         while true {

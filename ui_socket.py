@@ -8,6 +8,8 @@ import subprocess
 SOCKET_PATH = "/tmp/jarvis-ui.sock"
 _UI_BINARY = os.path.join(os.path.dirname(__file__), "ui/.build/release/JarvisUI")
 
+_VALID_STATES = frozenset({"standby", "listening", "thinking", "speaking"})
+
 
 def launch_ui() -> None:
     """Lance l'app Swift en arrière-plan si le binaire est présent."""
@@ -21,6 +23,8 @@ def launch_ui() -> None:
 
 def send_state(state: str, amplitude: float = 0.0) -> None:
     """Envoie l'état courant à l'UI Swift. Fire-and-forget, jamais bloquant."""
+    if state not in _VALID_STATES:
+        return
     _send_to(SOCKET_PATH, state, amplitude)
 
 
