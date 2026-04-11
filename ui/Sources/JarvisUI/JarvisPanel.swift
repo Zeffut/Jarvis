@@ -89,15 +89,17 @@ final class JarvisPanel: NSPanel {
     func open() {
         guard !isVisible, let screen = NSScreen.main else { return }
 
-        mtkView.isPaused = false  // reprend le rendu après orderOut
+        mtkView.isPaused = false
+        renderer?.triggerAppear()
 
         setFrame(notchFrame(screen: screen), display: false)
         alphaValue = 0
         orderFront(nil)
 
+        // Ressort : cubic-bezier avec léger dépassement (overshoot ~6%)
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.4
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            ctx.duration = 0.48
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.34, 1.28, 0.64, 1.0)
             animator().setFrame(targetFrame(screen: screen), display: true)
             animator().alphaValue = 1.0
         }
@@ -109,15 +111,26 @@ final class JarvisPanel: NSPanel {
             return
         }
 
+        renderer?.triggerDisappear()
+
+        // Phase 1 : légère rétraction ("prise d'élan"), 80 ms
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.25
+            ctx.duration = 0.08
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            animator().setFrame(notchFrame(screen: screen), display: true)
-            animator().alphaValue = 0.0
-        }, completionHandler: { [weak self] in
-            self?.orderOut(nil)
-            self?.mtkView.isPaused = true  // libère le GPU quand caché
-            completion?()
+            animator().setFrame(targetFrame(screen: screen).insetBy(dx: 7, dy: 7), display: true)
+            animator().alphaValue = 0.92
+        }, completionHandler: {
+            // Phase 2 : collapsing vers le notch + fade, 220 ms
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.22
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                self.animator().setFrame(self.notchFrame(screen: screen), display: true)
+                self.animator().alphaValue = 0.0
+            }, completionHandler: { [weak self] in
+                self?.orderOut(nil)
+                self?.mtkView.isPaused = true
+                completion?()
+            })
         })
     }
 
