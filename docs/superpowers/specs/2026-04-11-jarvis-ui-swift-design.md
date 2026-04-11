@@ -17,7 +17,7 @@ Ajout d'une interface graphique native macOS à Jarvis : une fenêtre qui s'ouvr
 main.py (Python)
   │
   ├── détecte état (standby / listening / thinking / speaking)
-  ├── mesure amplitude audio (mic ou ElevenLabs)
+  ├── mesure amplitude audio (mic ou Kokoro-82M)
   │
   └──(Unix socket /tmp/jarvis-ui.sock)──▶ JarvisUI.app (Swift)
                                             ├── NSPanel frameless
@@ -147,6 +147,6 @@ def send_state(state: str, amplitude: float = 0.0):
 ## Contraintes
 
 - L'app Swift doit être compilée (`swift build -c release`) avant utilisation — à documenter dans le README
-- L'amplitude audio ElevenLabs sera calculée via RMS sur le buffer `numpy` du callback `sounddevice` dans `speaker.py` — pas de changement d'architecture, juste `np.sqrt(np.mean(chunk**2))` passé à `send_state`
+- ElevenLabs remplacé par **Kokoro-82M** (TTS local, Apple Silicon via ONNX) — l'amplitude sera calculée via RMS sur le buffer `numpy` du callback `sounddevice` pendant la lecture : `np.sqrt(np.mean(chunk**2))` passé à `send_state`
 - Pas d'icône Dock, pas de menu bar icon — l'app est purement utilitaire
 - Compatible macOS 13+ (Ventura) minimum pour les APIs notch
