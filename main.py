@@ -191,6 +191,7 @@ def conversation_loop(
         callback=mic.callback,
     ):
         first_turn = True
+        _transcribe_retries = 0
         while True:
             timeout = 0 if first_turn else CONVERSATION_TIMEOUT
 
@@ -217,7 +218,6 @@ def conversation_loop(
             synth_queue: queue.Queue[str | None] = queue.Queue()
             play_queue: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=2)
             end_conversation = False
-            _transcribe_retries = 0
 
             def synth_worker():
                 """Thread 1 : synthétise (Kokoro) → met les samples dans play_queue."""
