@@ -1,0 +1,66 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "JarvisUI-arm64-apple-macosx26.0-release.exe": ["<JarvisUI-arm64-apple-macosx26.0-release.exe>"]
+  "JarvisUI-arm64-apple-macosx26.0-release.module": ["<JarvisUI-arm64-apple-macosx26.0-release.module>"]
+  "PackageStructure": ["<PackageStructure>"]
+  "main": ["<JarvisUI-arm64-apple-macosx26.0-release.exe>","<JarvisUI-arm64-apple-macosx26.0-release.module>"]
+  "test": ["<JarvisUI-arm64-apple-macosx26.0-release.exe>","<JarvisUI-arm64-apple-macosx26.0-release.module>"]
+default: "main"
+nodes:
+  "/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+commands:
+  "/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/AppDelegate.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/JarvisPanel.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/MetalRenderer.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/SocketListener.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/main.swift"]
+    outputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/sources"]
+    description: "Write auxiliary file /Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/sources"
+
+  "/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/AppDelegate.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/JarvisPanel.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/MetalRenderer.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/SocketListener.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/main.swift.o"]
+    outputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.product/Objects.LinkFileList"
+
+  "/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"]
+    outputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt"
+
+  "<JarvisUI-arm64-apple-macosx26.0-release.exe>":
+    tool: phony
+    inputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI"]
+    outputs: ["<JarvisUI-arm64-apple-macosx26.0-release.exe>"]
+
+  "<JarvisUI-arm64-apple-macosx26.0-release.module>":
+    tool: phony
+    inputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/AppDelegate.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/JarvisPanel.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/MetalRenderer.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/SocketListener.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/main.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/Modules/JarvisUI.swiftmodule"]
+    outputs: ["<JarvisUI-arm64-apple-macosx26.0-release.module>"]
+
+  "C.JarvisUI-arm64-apple-macosx26.0-release.exe":
+    tool: shell
+    inputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/AppDelegate.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/JarvisPanel.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/MetalRenderer.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/SocketListener.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/main.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.product/Objects.LinkFileList"]
+    outputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI"]
+    description: "Linking ./.build/arm64-apple-macosx/release/JarvisUI"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-L","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release","-o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI","-module-name","JarvisUI","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-dead_strip","-Xlinker","-alias","-Xlinker","_JarvisUI_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.product/Objects.LinkFileList","-Xlinker","-rpath","-Xlinker","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-6.2/macosx","-target","arm64-apple-macosx13.0","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g"]
+
+  "C.JarvisUI-arm64-apple-macosx26.0-release.module":
+    tool: shell
+    inputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/AppDelegate.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/JarvisPanel.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/MetalRenderer.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/SocketListener.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/main.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/sources"]
+    outputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/AppDelegate.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/JarvisPanel.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/MetalRenderer.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/SocketListener.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/main.swift.o","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/Modules/JarvisUI.swiftmodule"]
+    description: "Compiling Swift Module 'JarvisUI' (5 sources)"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","JarvisUI","-emit-dependencies","-emit-module","-emit-module-path","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/Modules/JarvisUI.swiftmodule","-output-file-map","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/output-file-map.json","-whole-module-optimization","-num-threads","10","-c","@/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/JarvisUI.build/sources","-I","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/Modules","-target","arm64-apple-macosx13.0","-whole-module-optimization","-num-threads","10","-serialize-diagnostics","-O","-j10","-DSWIFT_PACKAGE","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/zeffut/Desktop/Projets/Jarvis/ui/.build/arm64-apple-macosx/release/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","JarvisUI_main","-swift-version","5","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","ui"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/zeffut/Desktop/Projets/Jarvis/ui/Sources/JarvisUI/","/Users/zeffut/Desktop/Projets/Jarvis/ui/Package.swift","/Users/zeffut/Desktop/Projets/Jarvis/ui/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+
