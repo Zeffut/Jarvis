@@ -55,7 +55,13 @@ final class SocketListener {
 
         while true {
             let clientFd = accept(serverFd, nil, nil)
-            guard clientFd >= 0 else { continue }
+            guard clientFd >= 0 else {
+                // EINTR = signal reçu, retry normal ; autre erreur = pause courte
+                if errno != EINTR {
+                    Thread.sleep(forTimeInterval: 0.05)
+                }
+                continue
+            }
             handleClient(fd: clientFd)
             close(clientFd)
         }
