@@ -46,9 +46,12 @@ class MicBuffer:
         self.speech_started = False
         self.silence_start: float | None = None
         self.done = False
+        self.muted = False  # True pendant le TTS pour ignorer l'écho
         self._lock = threading.Lock()
 
     def callback(self, indata, frames, time_info, status):
+        if self.muted:
+            return
         chunk = indata[:, 0].copy()
 
         with self._lock:
@@ -194,7 +197,10 @@ def conversation_loop(
                     if sentence is None:
                         break
                     ui_socket.send_state("speaking", 0.5)
+                    mic.muted = True
                     speak(sentence)
+                    time.sleep(0.25)  # laisser l'écho s'éteindre
+                    mic.muted = False
 
             tts_thread = threading.Thread(target=tts_worker, daemon=True)
             tts_thread.start()
