@@ -24,6 +24,7 @@ struct Uniforms {
     float colorR;
     float colorG;
     float colorB;
+    float stateMode;   // 0=standby 1=listening 2=thinking 3=speaking
 };
 
 struct VertexOut {
@@ -40,7 +41,21 @@ vertex VertexOut vertex_main(
 ) {
     Particle p = particles[vid];
     float rotY = u.time * u.rotationSpeed;
-    float pulse = u.energy * 22.0 * sin(u.time * 2.8 + p.phase);
+
+    // ── Breathing (toujours actif, même en standby) ──────────────────────
+    float breathe = 0.045 * sin(u.time * 0.55 + p.phase * 0.2);
+
+    // ── Listening : ripple rapide réactif à l'amplitude ──────────────────
+    float isListening = step(0.5, u.stateMode) * (1.0 - step(1.5, u.stateMode));
+    float ripple = isListening * u.energy * 0.35 * sin(u.time * 9.0 + p.phase * 2.5);
+
+    // ── Speaking : burst asymétrique (grosses particules explosent plus) ──
+    float isSpeaking = step(2.5, u.stateMode) * (1.0 - step(3.5, u.stateMode));
+    float burst = isSpeaking * p.baseAlpha * u.energy * 18.0 * sin(u.time * 6.0 + p.phase);
+
+    // ── Pulse total ───────────────────────────────────────────────────────
+    float totalEnergy = u.energy + breathe;
+    float pulse = totalEnergy * 22.0 * sin(u.time * 2.8 + p.phase) + ripple + burst;
     float r = 100.0 + pulse;
 
     float x3 = r * sin(p.phi) * cos(p.theta + rotY);
@@ -53,15 +68,33 @@ vertex VertexOut vertex_main(
     float py = (y3 * fov) / zd;
     float2 ndc = float2(px / (u.viewWidth * 0.5), -py / (u.viewHeight * 0.5));
 
-    float depth = (z3 + 100.0) / 200.0;
-    float a = p.baseAlpha * (0.25 + depth * 0.75) * (0.5 + u.energy * 0.5);
+    float depth = clamp((z3 + 100.0) / 200.0, 0.0, 1.0);
+
+    // ── Shimmer : scintillement par particule ─────────────────────────────
+    float shimmer = 0.65 + 0.35 * sin(u.time * 4.5 + p.phase * 9.0);
+
+    // ── Thinking : anneau lumineux qui balaie en latitude ────────────────
+    float isThinking = step(1.5, u.stateMode) * (1.0 - step(2.5, u.stateMode));
+    float sweepPhi = fmod(u.time * 0.75, 3.14159);
+    float phiDist = abs(p.phi - sweepPhi);
+    float scan = isThinking * 0.85 * exp(-phiDist * phiDist * 7.0);
+
+    // ── Alpha final ───────────────────────────────────────────────────────
+    float a = p.baseAlpha
+            * (0.25 + depth * 0.75)
+            * (0.45 + totalEnergy * 0.55)
+            * shimmer;
+    a = clamp(a + scan, 0.0, 1.0);
+
+    // ── Taille des points ─────────────────────────────────────────────────
     float scale = fov / zd;
-    float sz = max(0.5, p.baseSize * scale * (1.0 + u.energy * 0.6));
+    float speakBoost = isSpeaking * p.baseAlpha * u.energy * 1.2;
+    float sz = max(0.5, p.baseSize * scale * (1.0 + totalEnergy * 0.9 + speakBoost));
 
     VertexOut out;
     out.position = float4(ndc, 0.0, 1.0);
     out.pointSize = sz * 2.0;
-    out.alpha = clamp(a, 0.0, 1.0);
+    out.alpha = a;
     out.color = float3(u.colorR, u.colorG, u.colorB);
     return out;
 }
@@ -71,8 +104,14 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
     float2 c = coord - 0.5;
     float d = length(c);
     if (d > 0.5) { discard_fragment(); }
-    float alpha = in.alpha * (1.0 - smoothstep(0.3, 0.5, d));
-    return float4(in.color, alpha);
+
+    // Halo central lumineux + bord doux
+    float glow   = exp(-d * d * 10.0);
+    float edge   = 1.0 - smoothstep(0.25, 0.5, d);
+    float alpha  = in.alpha * mix(edge, 1.0, glow * 0.6);
+    float3 color = in.color + glow * float3(0.15, 0.08, 0.0);   // légère chaleur au cœur
+
+    return float4(color, alpha);
 }
 """
 
@@ -95,6 +134,7 @@ private struct Uniforms {
     var colorR: Float = 0.0
     var colorG: Float = 0.831
     var colorB: Float = 1.0
+    var stateMode: Float = 0.0
 }
 
 // MARK: - Renderer
@@ -106,6 +146,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     private let particleCount = 1500
 
     private var currentState: String = "standby"
+    private var stateMode: Float = 0.0
     private var energy: Float = 0.05
     private var targetEnergy: Float = 0.05
     private var time: Float = 0
@@ -137,7 +178,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         guard let ps = try? device.makeRenderPipelineState(descriptor: desc) else { return nil }
         pipelineState = ps
 
-        // Generate 1500 points on sphere surface
+        // Générer 1500 points répartis uniformément sur la sphère
         var particles = [Particle]()
         particles.reserveCapacity(particleCount)
         for _ in 0..<particleCount {
@@ -145,8 +186,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
                 theta: Float.random(in: 0...(2 * .pi)),
                 phi: acos(Float.random(in: -1...1)),
                 phase: Float.random(in: 0...(2 * .pi)),
-                baseSize: Float.random(in: 0.7...2.2),
-                baseAlpha: Float.random(in: 0.25...1.0)
+                baseSize: Float.random(in: 0.6...2.0),
+                baseAlpha: Float.random(in: 0.3...1.0)
             ))
         }
         guard let buf = device.makeBuffer(
@@ -163,10 +204,18 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     func setState(_ state: String, amplitude: Float) {
         currentState = state
         switch state {
-        case "listening":  targetEnergy = 0.3 + amplitude * 0.6
-        case "speaking":   targetEnergy = 0.4 + amplitude * 0.55
-        case "thinking":   targetEnergy = 0.25
-        default:           targetEnergy = 0.05
+        case "listening":
+            stateMode = 1.0
+            targetEnergy = 0.25 + amplitude * 0.65
+        case "thinking":
+            stateMode = 2.0
+            targetEnergy = 0.22
+        case "speaking":
+            stateMode = 3.0
+            targetEnergy = 0.38 + amplitude * 0.55
+        default:
+            stateMode = 0.0
+            targetEnergy = 0.04
         }
     }
 
@@ -174,7 +223,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
 
     func draw(in view: MTKView) {
         time += 1.0 / 60.0
-        energy += (targetEnergy - energy) * 0.04
+
+        // Interpolation plus réactive pendant listening/speaking
+        let lerpSpeed: Float = (currentState == "listening" || currentState == "speaking") ? 0.07 : 0.04
+        energy += (targetEnergy - energy) * lerpSpeed
 
         guard
             let drawable = view.currentDrawable,
@@ -183,16 +235,18 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             let encoder = cmdBuf.makeRenderCommandEncoder(descriptor: passDesc)
         else { return }
 
-        let rotSpeed: Float = currentState == "speaking" ? 0.25
-                            : currentState == "listening" ? 0.15
-                            : 0.10
+        let rotSpeed: Float = currentState == "speaking" ? 0.28
+                            : currentState == "listening" ? 0.16
+                            : currentState == "thinking"  ? 0.08
+                            : 0.06
 
         var uniforms = Uniforms(
             time: time,
             energy: energy,
             rotationSpeed: rotSpeed,
             viewWidth: Float(view.drawableSize.width),
-            viewHeight: Float(view.drawableSize.height)
+            viewHeight: Float(view.drawableSize.height),
+            stateMode: stateMode
         )
 
         encoder.setRenderPipelineState(pipelineState)
