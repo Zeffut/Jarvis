@@ -24,7 +24,9 @@ struct Uniforms {
     float colorR;
     float colorG;
     float colorB;
-    float stateMode;   // 0=standby 1=listening 2=thinking 3=speaking
+    float stateMode;    // 0=standby 1=listening 2=thinking 3=speaking
+    float transitionT;  // 0=invisible → 1=pleinement visible
+    float transitionDir;// +1=apparition  -1=disparition  0=stable
 };
 
 struct VertexOut {
@@ -87,6 +89,24 @@ vertex VertexOut vertex_main(
             * shimmer;
     a = clamp(a + scan, 0.0, 1.0);
 
+    // ── Transition apparition / disparition ───────────────────────────────
+    if (u.transitionT < 0.999) {
+        float norm = p.phi / 3.14159;
+        if (u.transitionDir > 0.0) {
+            // Apparition : vague de révélation du pôle nord (phi=0) vers le sud (phi=π)
+            float frontier = mix(-0.15, 1.15, u.transitionT);
+            float reveal = 1.0 - smoothstep(frontier - 0.1, frontier + 0.1, norm);
+            // Halo au front de la vague
+            float waveDist = abs(norm - frontier);
+            float halo = exp(-waveDist * waveDist * 60.0) * 1.8;
+            a = clamp(a * reveal + halo * u.transitionT, 0.0, 1.0);
+        } else {
+            // Disparition : implosion vers le centre (r réduit) + fondu global
+            float fade = u.transitionT * u.transitionT;
+            a *= fade;
+        }
+    }
+
     // ── Taille des points ─────────────────────────────────────────────────
     float scale = fov / zd;
     float speakBoost = isSpeaking * p.baseAlpha * u.energy * 1.2;
@@ -136,6 +156,8 @@ private struct Uniforms {
     var colorG: Float = 0.831
     var colorB: Float = 1.0
     var stateMode: Float = 0.0
+    var transitionT: Float = 1.0
+    var transitionDir: Float = 0.0
 }
 
 // MARK: - Renderer
@@ -155,6 +177,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     // Burst transitoire pour les animations d'apparition / disparition
     private var transientBoost: Float = 0.0   // valeur courante (décroît vers 0)
     private var transientDecay: Float = 0.0   // vitesse de décroissance par frame
+
+    // Progression de la transition shader (0=invisible, 1=visible)
+    private var transitionT: Float = 1.0
+    private var transitionDir: Float = 0.0   // +1 apparition, -1 disparition
 
     init?(mtkView: MTKView) {
         guard
@@ -205,16 +231,19 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         super.init()
     }
 
-    /// Burst de particules à l'apparition de la fenêtre.
+    /// Déclenche le sweep de révélation des particules (haut → bas).
     func triggerAppear() {
-        transientBoost = 1.4
-        transientDecay = 0.032   // ~45 frames pour retomber à 0
+        transitionT = 0.0
+        transitionDir = 1.0
+        transientBoost = 0.0
+        transientDecay = 0.0
     }
 
-    /// Implosion douce à la disparition.
+    /// Déclenche l'implosion + fondu des particules.
     func triggerDisappear() {
-        transientBoost = 0.6
-        transientDecay = 0.055   // ~11 frames, fenêtre se ferme vite
+        transitionDir = -1.0
+        transientBoost = 0.5
+        transientDecay = 0.04
     }
 
     /// Appelé par AppDelegate quand un message socket arrive.
@@ -240,6 +269,14 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
 
     func draw(in view: MTKView) {
         time += 1.0 / 60.0
+
+        // Avancer la transition shader
+        if transitionDir > 0 {
+            transitionT = min(1.0, transitionT + 0.022)  // apparition ~45 frames ≈ 0.75s
+            if transitionT >= 1.0 { transitionDir = 0 }
+        } else if transitionDir < 0 {
+            transitionT = max(0.0, transitionT - 0.05)   // disparition ~20 frames ≈ 0.33s
+        }
 
         // Décroissance du burst transitoire
         if transientBoost > 0 {
@@ -270,7 +307,9 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             rotationSpeed: rotSpeed,
             viewWidth: Float(view.bounds.size.width) * 2.0,
             viewHeight: Float(view.bounds.size.height) * 2.0,
-            stateMode: stateMode
+            stateMode: stateMode,
+            transitionT: transitionT,
+            transitionDir: transitionDir
         )
 
         encoder.setRenderPipelineState(pipelineState)

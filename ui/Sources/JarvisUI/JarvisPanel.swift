@@ -92,45 +92,63 @@ final class JarvisPanel: NSPanel {
         mtkView.isPaused = false
         renderer?.triggerAppear()
 
-        setFrame(notchFrame(screen: screen), display: false)
+        // Fenêtre positionnée d'emblée à sa position finale, invisible
+        setFrame(targetFrame(screen: screen), display: false)
         alphaValue = 0
         orderFront(nil)
 
-        // Ressort : cubic-bezier avec léger dépassement (overshoot ~6%)
+        // Ancrer la layer en haut au centre → le spring "jaillit" depuis le notch
+        if let layer = mtkView.layer {
+            layer.anchorPoint = CGPoint(x: 0.5, y: 1.0)
+            layer.position    = CGPoint(x: mtkView.bounds.midX, y: mtkView.bounds.maxY)
+        }
+
+        // Spring CAAnimation : scale 0.001 → 1.0 avec oscillations (underdamped)
+        let spring = CASpringAnimation(keyPath: "transform.scale")
+        spring.fromValue  = 0.001
+        spring.toValue    = 1.0
+        spring.mass       = 0.9
+        spring.stiffness  = 260
+        spring.damping    = 11        // ζ ≈ 0.36 → ~2.5 oscillations
+        spring.duration   = spring.settlingDuration
+        spring.isRemovedOnCompletion = true
+        mtkView.layer?.add(spring, forKey: "scaleIn")
+        mtkView.layer?.transform = CATransform3DIdentity  // valeur modèle finale
+
+        // Fade in window (plus rapide que le spring, sinon on voit un fond noir)
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.48
-            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.34, 1.28, 0.64, 1.0)
-            animator().setFrame(targetFrame(screen: screen), display: true)
+            ctx.duration = 0.18
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             animator().alphaValue = 1.0
         }
     }
 
     func close(completion: (() -> Void)? = nil) {
-        guard isVisible, let screen = NSScreen.main else {
-            completion?()
-            return
-        }
+        guard isVisible else { completion?(); return }
 
         renderer?.triggerDisappear()
 
-        // Phase 1 : légère rétraction ("prise d'élan"), 80 ms
+        // Collapse rapide sans rebond (overdamped)
+        let collapse = CABasicAnimation(keyPath: "transform.scale")
+        collapse.fromValue              = 1.0
+        collapse.toValue                = 0.001
+        collapse.duration               = 0.25
+        collapse.timingFunction         = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 1.0, 0.6)
+        collapse.isRemovedOnCompletion  = false
+        collapse.fillMode               = .forwards
+        mtkView.layer?.add(collapse, forKey: "scaleOut")
+
+        // Fade out window en parallèle
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.08
+            ctx.duration = 0.25
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            animator().setFrame(targetFrame(screen: screen).insetBy(dx: 7, dy: 7), display: true)
-            animator().alphaValue = 0.92
-        }, completionHandler: {
-            // Phase 2 : collapsing vers le notch + fade, 220 ms
-            NSAnimationContext.runAnimationGroup({ ctx in
-                ctx.duration = 0.22
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
-                self.animator().setFrame(self.notchFrame(screen: screen), display: true)
-                self.animator().alphaValue = 0.0
-            }, completionHandler: { [weak self] in
-                self?.orderOut(nil)
-                self?.mtkView.isPaused = true
-                completion?()
-            })
+            animator().alphaValue = 0.0
+        }, completionHandler: { [weak self] in
+            self?.mtkView.layer?.removeAllAnimations()
+            self?.mtkView.layer?.transform = CATransform3DIdentity
+            self?.orderOut(nil)
+            self?.mtkView.isPaused = true
+            completion?()
         })
     }
 
