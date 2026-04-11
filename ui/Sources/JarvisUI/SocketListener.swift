@@ -12,10 +12,13 @@ final class SocketListener {
 
     private let socketPath = "/tmp/jarvis-ui.sock"
     private let queue = DispatchQueue(label: "jarvis.socket", qos: .background)
+    private var isRunning = false
 
     private init() {}
 
     func start() {
+        guard !isRunning else { return }
+        isRunning = true
         queue.async { self.runLoop() }
     }
 
@@ -55,11 +58,14 @@ final class SocketListener {
     }
 
     private func handleClient(fd: Int32) {
+        var data = Data()
         var buffer = [UInt8](repeating: 0, count: 4096)
-        let n = read(fd, &buffer, buffer.count)
-        guard n > 0 else { return }
-
-        let data = Data(buffer.prefix(n))
+        while true {
+            let n = read(fd, &buffer, buffer.count)
+            if n <= 0 { break }
+            data.append(contentsOf: buffer.prefix(n))
+        }
+        guard !data.isEmpty else { return }
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let state = json["state"] as? String
