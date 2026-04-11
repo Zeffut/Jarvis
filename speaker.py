@@ -11,9 +11,10 @@ warnings.filterwarnings("ignore")
 from config import KOKORO_VOICE, KOKORO_SPEED
 
 _CACHE_PATH = os.path.join(os.path.dirname(__file__), ".greeting_cache.npy")
-_MODEL_REPO = "hexgrad/Kokoro-82M"
-_MODEL_FILE = "kokoro-v0_19.onnx"
-_VOICES_FILE = "voices.bin"
+_MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+_MODEL_PATH = os.path.join(_MODELS_DIR, "kokoro-v1.0.onnx")
+_VOICES_PATH = os.path.join(_MODELS_DIR, "voices-v1.0.bin")
+_RELEASES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
 KOKORO_SAMPLE_RATE = 24000
 
 _kokoro = None
@@ -24,11 +25,16 @@ _greeting_samples: np.ndarray | None = None
 def _get_kokoro():
     global _kokoro
     if _kokoro is None:
+        import urllib.request
         from kokoro_onnx import Kokoro
-        from huggingface_hub import hf_hub_download
-        model_path = hf_hub_download(repo_id=_MODEL_REPO, filename=_MODEL_FILE)
-        voices_path = hf_hub_download(repo_id=_MODEL_REPO, filename=_VOICES_FILE)
-        _kokoro = Kokoro(model_path, voices_path)
+        os.makedirs(_MODELS_DIR, exist_ok=True)
+        if not os.path.exists(_MODEL_PATH):
+            print("Téléchargement du modèle Kokoro (~310MB)...", flush=True)
+            urllib.request.urlretrieve(f"{_RELEASES_URL}/kokoro-v1.0.onnx", _MODEL_PATH)
+        if not os.path.exists(_VOICES_PATH):
+            print("Téléchargement des voix Kokoro...", flush=True)
+            urllib.request.urlretrieve(f"{_RELEASES_URL}/voices-v1.0.bin", _VOICES_PATH)
+        _kokoro = Kokoro(_MODEL_PATH, _VOICES_PATH)
     return _kokoro
 
 

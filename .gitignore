@@ -10,3 +10,4 @@ build/
 .greeting_cache.mp3
 test_wake.py
 test_transcribe.py
+models/
