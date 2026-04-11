@@ -10,7 +10,7 @@ CONVERSATION_TIMEOUT = 5.0
 WHISPER_MODEL = "mlx-community/whisper-turbo"
 
 # TTS Kokoro
-KOKORO_VOICE = "ff_siwis"  # French female (SIWIS dataset)
+KOKORO_VOICE = "bm_george"  # British male — voix Jarvis
 KOKORO_SPEED = 1.0
 
 END_SIGNAL = "[FIN]"
