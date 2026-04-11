@@ -47,12 +47,15 @@ vertex VertexOut vertex_main(
     // ── Breathing (toujours actif, même en standby) ──────────────────────
     float breathe = 0.045 * sin(u.time * 0.55 + p.phase * 0.2);
 
+    // ── Détection des états avec crossfade doux (smoothstep au lieu de step) ──
+    float isListening = smoothstep(0.2, 0.8, u.stateMode) * (1.0 - smoothstep(1.2, 1.8, u.stateMode));
+    float isThinkingF = smoothstep(1.2, 1.8, u.stateMode) * (1.0 - smoothstep(2.2, 2.8, u.stateMode));
+    float isSpeaking  = smoothstep(2.2, 2.8, u.stateMode) * (1.0 - smoothstep(3.2, 3.8, u.stateMode));
+
     // ── Listening : ripple rapide réactif à l'amplitude ──────────────────
-    float isListening = step(0.5, u.stateMode) * (1.0 - step(1.5, u.stateMode));
     float ripple = isListening * u.energy * 0.35 * sin(u.time * 9.0 + p.phase * 2.5);
 
     // ── Speaking : burst asymétrique (grosses particules explosent plus) ──
-    float isSpeaking = step(2.5, u.stateMode) * (1.0 - step(3.5, u.stateMode));
     float burst = isSpeaking * p.baseAlpha * u.energy * 18.0 * sin(u.time * 6.0 + p.phase);
 
     // ── Pulse total ───────────────────────────────────────────────────────
@@ -76,11 +79,10 @@ vertex VertexOut vertex_main(
     float shimmer = 0.65 + 0.35 * sin(u.time * 4.5 + p.phase * 9.0);
 
     // ── Thinking : anneau qui fait des allers-retours haut↔bas ───────────
-    float isThinking = step(1.5, u.stateMode) * (1.0 - step(2.5, u.stateMode));
     float t = fmod(u.time * 0.75, 2.0 * 3.14159);
     float sweepPhi = 3.14159 - abs(t - 3.14159);   // triangle wave 0→π→0
     float phiDist = abs(p.phi - sweepPhi);
-    float scan = isThinking * 0.85 * exp(-phiDist * phiDist * 7.0);
+    float scan = isThinkingF * 0.85 * exp(-phiDist * phiDist * 7.0);
 
     // ── Alpha final ───────────────────────────────────────────────────────
     float a = p.baseAlpha
@@ -109,7 +111,7 @@ vertex VertexOut vertex_main(
 
     // ── Taille des points ─────────────────────────────────────────────────
     float scale = fov / zd;
-    float speakBoost = isSpeaking * p.baseAlpha * u.energy * 1.2;
+    float speakBoost = isSpeaking  * p.baseAlpha * u.energy * 1.2;
     float sz = max(0.5, p.baseSize * scale * (1.0 + totalEnergy * 0.9 + speakBoost));
 
     VertexOut out;
@@ -169,7 +171,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     private let particleCount = 1500
 
     private var currentState: String = "standby"
-    private var stateMode: Float = 0.0
+    private var stateMode: Float = 0.0       // valeur courante (interpolée)
+    private var targetStateMode: Float = 0.0 // valeur cible
     private var energy: Float = 0.05
     private var targetEnergy: Float = 0.05
     private var time: Float = 0
@@ -251,16 +254,16 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         currentState = state
         switch state {
         case "listening":
-            stateMode = 1.0
+            targetStateMode = 1.0
             targetEnergy = 0.25 + amplitude * 0.65
         case "thinking":
-            stateMode = 2.0
+            targetStateMode = 2.0
             targetEnergy = 0.22
         case "speaking":
-            stateMode = 3.0
+            targetStateMode = 3.0
             targetEnergy = 0.38 + amplitude * 0.55
         default:
-            stateMode = 0.0
+            targetStateMode = 0.0
             targetEnergy = 0.04
         }
     }
@@ -283,7 +286,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             transientBoost = max(0, transientBoost - transientDecay)
         }
 
-        // Interpolation plus réactive pendant listening/speaking
+        // Interpolation stateMode (transitions fluides entre états)
+        stateMode += (targetStateMode - stateMode) * 0.055
+
+        // Interpolation energy, plus réactive pendant listening/speaking
         let lerpSpeed: Float = (currentState == "listening" || currentState == "speaking") ? 0.07 : 0.04
         energy += (targetEnergy - energy) * lerpSpeed
 
