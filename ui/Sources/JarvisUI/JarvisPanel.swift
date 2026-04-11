@@ -47,25 +47,38 @@ final class JarvisPanel: NSPanel {
         contentView?.addSubview(mtkView)
     }
 
-    // MARK: - Notch positioning
+    // MARK: - Notch / screen positioning
 
-    /// Retourne le NSRect cible (800x600) centre sous le notch.
+    /// Vrai si l'écran est l'écran intégré du Mac (possède un notch).
+    private func isBuiltinScreen(_ screen: NSScreen) -> Bool {
+        guard let id = screen.deviceDescription[
+            NSDeviceDescriptionKey("NSScreenNumber")
+        ] as? CGDirectDisplayID else { return false }
+        return CGDisplayIsBuiltin(id) != 0
+    }
+
+    /// Y du bord haut utilisable : sous le menu bar sur écran externe, sommet absolu sur l'écran interne.
+    private func topEdge(screen: NSScreen) -> CGFloat {
+        isBuiltinScreen(screen) ? screen.frame.maxY : screen.visibleFrame.maxY
+    }
+
+    /// Retourne le NSRect cible centré sous le notch (interne) ou sous le menu bar (externe).
     private func targetFrame(screen: NSScreen) -> NSRect {
         let sf = screen.frame
         return NSRect(
-            x: (sf.width - panelSize.width) / 2,
-            y: sf.maxY - panelSize.height,
+            x: sf.minX + (sf.width - panelSize.width) / 2,
+            y: topEdge(screen: screen) - panelSize.height,
             width: panelSize.width,
             height: panelSize.height
         )
     }
 
-    /// Petit rect au niveau du notch (point de depart de l'animation).
+    /// Petit rect de départ de l'animation (notch ou bord menu bar).
     private func notchFrame(screen: NSScreen) -> NSRect {
         let sf = screen.frame
         return NSRect(
-            x: (sf.width - 180) / 2,
-            y: sf.maxY - 6,
+            x: sf.minX + (sf.width - 180) / 2,
+            y: topEdge(screen: screen) - 6,
             width: 180,
             height: 6
         )
