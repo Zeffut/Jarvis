@@ -31,6 +31,7 @@ from assistant import Assistant, TOKEN, SENTENCE, TOOL_USE
 from speaker import speak, speak_status, preload_greeting, play_greeting
 from audio import is_silent
 import ui
+import ui_socket
 
 PREVIEW_INTERVAL = 0.4  # seconds between preview transcriptions
 
@@ -104,6 +105,8 @@ def record_with_preview(mic: MicBuffer, preview_model, timeout: float = 0) -> np
                 if audio is not None and len(audio) > 0:
                     last_preview = now
                     last_chunk_count = chunk_count
+                    rms = float(np.sqrt(np.mean(audio[-int(SAMPLE_RATE * 0.1):]**2))) if len(audio) > 0 else 0.0
+                    ui_socket.send_state("listening", rms)
                     # Use tiny model for fast preview
                     segments, _ = preview_model.transcribe(
                         audio, language="fr", beam_size=1,
@@ -178,6 +181,7 @@ def conversation_loop(
                 break
 
             ui.show_user_text(final_text)
+            ui_socket.send_state("thinking")
             # Queue sentences for TTS in background thread
             import queue
             tts_queue: queue.Queue[str | None] = queue.Queue()
@@ -188,6 +192,7 @@ def conversation_loop(
                     sentence = tts_queue.get()
                     if sentence is None:
                         break
+                    ui_socket.send_state("speaking", 0.5)
                     speak(sentence)
 
             tts_thread = threading.Thread(target=tts_worker, daemon=True)
@@ -251,6 +256,7 @@ def conversation_loop(
                 break
 
     ui.show_end_conversation()
+    ui_socket.send_state("standby")
     assistant.reset()
 
 
@@ -267,6 +273,7 @@ def main():
 
     ui.show_loading("Detection vocale...")
     wake = WakeWordListener()
+    ui_socket.launch_ui()
 
     ui.show_loading("Synthese vocale...")
     preload_greeting()
@@ -280,6 +287,7 @@ def main():
         while True:
             ui.show_standby()
             wake.listen()
+            ui_socket.send_state("listening")
             ui.show_wake()
             play_greeting()
             conversation_loop(transcriber, assistant, preview_model)
