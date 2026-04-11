@@ -32,7 +32,7 @@ def _send_to(path: str, state: str, amplitude: float) -> None:
     """Bas niveau — permet d'injecter un path custom en test."""
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(0.05)
+            s.settimeout(0.15)
             s.connect(path)
             s.sendall(json.dumps({"state": state, "amplitude": round(amplitude, 3)}).encode())
     except Exception:

@@ -35,7 +35,9 @@ from audio import is_silent
 import ui
 import ui_socket
 
-PREVIEW_INTERVAL = 0.4  # seconds between preview transcriptions
+PREVIEW_INTERVAL = 0.4       # seconds between preview transcriptions
+MAX_RECORDING_SECONDS = 120  # sécurité : arrêt même si speech continu
+MAX_TRANSCRIBE_RETRIES = 3   # max "Pardon ?" avant de quitter
 
 
 class MicBuffer:
@@ -108,9 +110,14 @@ def record_with_preview(mic: MicBuffer, preview_model, timeout: float = 0) -> np
         time.sleep(0.05)
         now = time.time()
 
-        # Timeout check (only before speech starts)
+        # Timeout avant parole
         if timeout > 0 and not mic.speech_started and now - start >= timeout:
             return None
+
+        # Sécurité : enregistrement max 2 min même si speech continu
+        if mic.speech_started and now - start >= MAX_RECORDING_SECONDS:
+            mic.done = True
+            break
 
         # Preview transcription while recording
         if mic.speech_started and now - last_preview >= PREVIEW_INTERVAL:
@@ -121,7 +128,9 @@ def record_with_preview(mic: MicBuffer, preview_model, timeout: float = 0) -> np
                 if audio is not None and len(audio) > 0:
                     last_preview = now
                     last_chunk_count = chunk_count
-                    rms = float(np.sqrt(np.mean(audio[-int(SAMPLE_RATE * 0.1):]**2))) if len(audio) > 0 else 0.0
+                    # Fenêtre RMS : au moins 1600 samples pour être représentative
+                    win = max(1600, len(audio) // 3)
+                    rms = float(np.sqrt(np.mean(audio[-win:]**2)))
                     ui_socket.send_state("listening", rms)
                     # Use tiny model for fast preview
                     segments, _ = preview_model.transcribe(
@@ -194,9 +203,13 @@ def conversation_loop(
             # Final accurate transcription with mlx-whisper turbo
             final_text = transcriber.transcribe(audio)
             if not final_text:
+                _transcribe_retries += 1
+                if _transcribe_retries >= MAX_TRANSCRIBE_RETRIES:
+                    break  # abandon après 3 échecs consécutifs
                 speak_status("Pardon ?")
                 mic.reset()
-                continue  # retenter plutôt que quitter la conversation
+                continue
+            _transcribe_retries = 0  # reset compteur si succès
 
             ui.show_user_text(final_text)
             ui_socket.send_state("thinking")
@@ -204,6 +217,7 @@ def conversation_loop(
             synth_queue: queue.Queue[str | None] = queue.Queue()
             play_queue: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=2)
             end_conversation = False
+            _transcribe_retries = 0
 
             def synth_worker():
                 """Thread 1 : synthétise (Kokoro) → met les samples dans play_queue."""
@@ -213,7 +227,10 @@ def conversation_loop(
                         play_queue.put(None)
                         break
                     samples = synthesize(sentence)
-                    play_queue.put(samples)
+                    try:
+                        play_queue.put(samples, timeout=30)  # évite deadlock si play_worker crash
+                    except queue.Full:
+                        pass
 
             def play_worker():
                 """Thread 2 : joue les samples dès qu'ils arrivent, sans attendre la synth."""

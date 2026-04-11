@@ -39,6 +39,5 @@ SYSTEM_PROMPT = (
 )
 
 
-def load_config(env_path: str = ".env") -> dict:
+def load_config(env_path: str = ".env") -> None:
     load_dotenv(env_path)
-    return {}
