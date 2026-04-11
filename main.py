@@ -28,7 +28,7 @@ from config import (
 from wake_word import WakeWordListener
 from transcriber import Transcriber
 from assistant import Assistant, TOKEN, SENTENCE, TOOL_USE
-from speaker import speak, preload_greeting, play_greeting
+from speaker import speak, speak_status, preload_greeting, play_greeting
 from audio import is_silent
 import ui
 
@@ -115,11 +115,43 @@ def record_with_preview(mic: MicBuffer, preview_model, timeout: float = 0) -> np
     return mic.get_audio()
 
 
+def _is_source_line(text: str) -> bool:
+    """Vrai si la phrase est une ligne de source/lien — pas à lire à voix haute."""
+    t = text.strip()
+    return (
+        t.startswith("Sources") or
+        t.startswith("- [") or
+        t.startswith("[") and "](http" in t or
+        t.startswith("http")
+    )
+
+
+def _tool_phrase(tool_name: str) -> str:
+    """Retourne une courte phrase naturelle décrivant l'outil utilisé."""
+    name = tool_name.lower()
+    if "bash" in name:
+        return "j'exécute"
+    if "web_search" in name or "websearch" in name:
+        return "je cherche en ligne"
+    if "web_fetch" in name or "webfetch" in name or "fetch" in name:
+        return "je consulte"
+    if "read" in name:
+        return "je lis"
+    if "write" in name:
+        return "j'écris"
+    if "edit" in name:
+        return "je modifie"
+    if "glob" in name or "grep" in name:
+        return "je cherche"
+    if "agent" in name:
+        return "je délègue"
+    return "je travaille"
+
+
 def conversation_loop(
     transcriber: Transcriber,
     assistant: Assistant,
     preview_model,
-    elevenlabs_key: str,
 ) -> None:
     mic = MicBuffer()
 
@@ -156,7 +188,7 @@ def conversation_loop(
                     sentence = tts_queue.get()
                     if sentence is None:
                         break
-                    speak(sentence, api_key=elevenlabs_key)
+                    speak(sentence)
 
             tts_thread = threading.Thread(target=tts_worker, daemon=True)
             tts_thread.start()
@@ -171,7 +203,9 @@ def conversation_loop(
                 if event_type == TOOL_USE:
                     import json as _json
                     tool_info = _json.loads(text)
-                    ui.show_tool_use(tool_info["name"], tool_info.get("description", ""))
+                    tool_name = tool_info["name"]
+                    ui.show_tool_use(tool_name, tool_info.get("description", ""))
+                    speak_status(_tool_phrase(tool_name))
                 elif event_type == TOKEN:
                     if not jarvis_started:
                         ui.show_jarvis_start()
@@ -190,7 +224,8 @@ def conversation_loop(
                         display_buffer = ""
                 elif event_type == SENTENCE:
                     clean = text.replace(END_SIGNAL, "").strip()
-                    if clean:
+                    # Filtrer les lignes de sources/markdown avant TTS
+                    if clean and not _is_source_line(clean):
                         tts_queue.put(clean)
                     if END_SIGNAL in text:
                         end_conversation = True
@@ -234,7 +269,7 @@ def main():
     wake = WakeWordListener()
 
     ui.show_loading("Synthese vocale...")
-    preload_greeting(api_key=cfg["elevenlabs_api_key"])
+    preload_greeting()
 
     ui.show_ready()
 
@@ -247,7 +282,7 @@ def main():
             wake.listen()
             ui.show_wake()
             play_greeting()
-            conversation_loop(transcriber, assistant, preview_model, cfg["elevenlabs_api_key"])
+            conversation_loop(transcriber, assistant, preview_model)
     except KeyboardInterrupt:
         ui.show_shutdown()
     finally:
