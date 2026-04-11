@@ -171,10 +171,12 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     private let particleCount = 1500
 
     private var currentState: String = "standby"
-    private var stateMode: Float = 0.0       // valeur courante (interpolée)
-    private var targetStateMode: Float = 0.0 // valeur cible
-    private var energy: Float = 0.05
+    private var stateMode: Float    = 0.0
+    private var targetStateMode: Float = 0.0
+    private var energy: Float       = 0.05
     private var targetEnergy: Float = 0.05
+    private var rotSpeed: Float     = 0.06
+    private var targetRotSpeed: Float = 0.06
     private var time: Float = 0
 
     // Burst transitoire pour les animations d'apparition / disparition
@@ -255,16 +257,20 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         switch state {
         case "listening":
             targetStateMode = 1.0
-            targetEnergy = 0.25 + amplitude * 0.65
+            targetEnergy    = 0.25 + amplitude * 0.65
+            targetRotSpeed  = 0.16
         case "thinking":
             targetStateMode = 2.0
-            targetEnergy = 0.22
+            targetEnergy    = 0.22
+            targetRotSpeed  = 0.08
         case "speaking":
             targetStateMode = 3.0
-            targetEnergy = 0.38 + amplitude * 0.55
+            targetEnergy    = 0.38 + amplitude * 0.55
+            targetRotSpeed  = 0.28
         default:
             targetStateMode = 0.0
-            targetEnergy = 0.04
+            targetEnergy    = 0.04
+            targetRotSpeed  = 0.06
         }
     }
 
@@ -286,12 +292,11 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             transientBoost = max(0, transientBoost - transientDecay)
         }
 
-        // Interpolation stateMode (transitions fluides entre états)
-        stateMode += (targetStateMode - stateMode) * 0.055
-
-        // Interpolation energy, plus réactive pendant listening/speaking
-        let lerpSpeed: Float = (currentState == "listening" || currentState == "speaking") ? 0.07 : 0.04
-        energy += (targetEnergy - energy) * lerpSpeed
+        // Tout lerpe à la même cadence — aucun paramètre ne saute
+        let k: Float = 0.032
+        stateMode += (targetStateMode - stateMode) * k
+        energy    += (targetEnergy    - energy)    * k
+        rotSpeed  += (targetRotSpeed  - rotSpeed)  * k
 
         guard
             let drawable = view.currentDrawable,
@@ -299,11 +304,6 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             let cmdBuf = commandQueue.makeCommandBuffer(),
             let encoder = cmdBuf.makeRenderCommandEncoder(descriptor: passDesc)
         else { return }
-
-        let rotSpeed: Float = currentState == "speaking" ? 0.28
-                            : currentState == "listening" ? 0.16
-                            : currentState == "thinking"  ? 0.08
-                            : 0.06
 
         // Utiliser bounds×2 pour une taille identique sur tous les écrans
         // (drawableSize varie selon la densité Retina, bounds.size×2 = référence stable)
