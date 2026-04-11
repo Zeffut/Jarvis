@@ -40,20 +40,20 @@ vertex VertexOut vertex_main(
 ) {
     Particle p = particles[vid];
     float rotY = u.time * u.rotationSpeed;
-    float pulse = u.energy * 18.0 * sin(u.time * 2.8 + p.phase);
-    float r = 72.0 + pulse;
+    float pulse = u.energy * 22.0 * sin(u.time * 2.8 + p.phase);
+    float r = 100.0 + pulse;
 
     float x3 = r * sin(p.phi) * cos(p.theta + rotY);
     float y3 = r * cos(p.phi);
     float z3 = r * sin(p.phi) * sin(p.theta + rotY);
 
-    float fov = 260.0;
-    float zd = z3 + 260.0;
+    float fov = 200.0;
+    float zd = z3 + 200.0;
     float px = (x3 * fov) / zd;
     float py = (y3 * fov) / zd;
     float2 ndc = float2(px / (u.viewWidth * 0.5), -py / (u.viewHeight * 0.5));
 
-    float depth = (z3 + 85.0) / 170.0;
+    float depth = (z3 + 100.0) / 200.0;
     float a = p.baseAlpha * (0.25 + depth * 0.75) * (0.5 + u.energy * 0.5);
     float scale = fov / zd;
     float sz = max(0.5, p.baseSize * scale * (1.0 + u.energy * 0.6));
