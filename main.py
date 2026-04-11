@@ -30,7 +30,7 @@ from config import (
 from wake_word import WakeWordListener
 from transcriber import Transcriber
 from assistant import Assistant, TOKEN, SENTENCE, TOOL_USE
-from speaker import speak, speak_status, preload_greeting, play_greeting
+from speaker import speak, speak_status, synthesize, preload_greeting, play_greeting, KOKORO_SAMPLE_RATE
 from audio import is_silent
 import ui
 import ui_socket
@@ -187,23 +187,38 @@ def conversation_loop(
 
             ui.show_user_text(final_text)
             ui_socket.send_state("thinking")
-            # Queue sentences for TTS in background thread
-            tts_queue: queue.Queue[str | None] = queue.Queue()
+            # Pipeline TTS deux étages : synthèse en avance pendant que l'audio joue
+            synth_queue: queue.Queue[str | None] = queue.Queue()
+            play_queue: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=2)
             end_conversation = False
 
-            def tts_worker():
+            def synth_worker():
+                """Thread 1 : synthétise (Kokoro) → met les samples dans play_queue."""
                 while True:
-                    sentence = tts_queue.get()
+                    sentence = synth_queue.get()
                     if sentence is None:
+                        play_queue.put(None)
+                        break
+                    samples = synthesize(sentence)
+                    play_queue.put(samples)
+
+            def play_worker():
+                """Thread 2 : joue les samples dès qu'ils arrivent, sans attendre la synth."""
+                while True:
+                    samples = play_queue.get()
+                    if samples is None:
                         break
                     ui_socket.send_state("speaking", 0.5)
                     mic.muted = True
-                    speak(sentence)
+                    sd.play(samples, samplerate=KOKORO_SAMPLE_RATE)
+                    sd.wait()
                     time.sleep(0.25)  # laisser l'écho s'éteindre
                     mic.muted = False
 
-            tts_thread = threading.Thread(target=tts_worker, daemon=True)
-            tts_thread.start()
+            synth_thread = threading.Thread(target=synth_worker, daemon=True)
+            play_thread = threading.Thread(target=play_worker, daemon=True)
+            synth_thread.start()
+            play_thread.start()
 
             # Collect full response, display tokens, queue sentences for TTS
             # Buffer tokens to detect [FIN] before displaying
@@ -237,7 +252,7 @@ def conversation_loop(
                     clean = text.replace(END_SIGNAL, "").strip()
                     # Filtrer les lignes de sources/markdown avant TTS
                     if clean and not _is_source_line(clean):
-                        tts_queue.put(clean)
+                        synth_queue.put(clean)
                     if END_SIGNAL in text:
                         end_conversation = True
 
@@ -251,9 +266,10 @@ def conversation_loop(
             if full_response.strip() == END_SIGNAL:
                 end_conversation = True
 
-            # Wait for TTS to finish
-            tts_queue.put(None)
-            tts_thread.join()
+            # Attendre que le pipeline TTS se vide
+            synth_queue.put(None)
+            synth_thread.join()
+            play_thread.join()
 
             ui.show_jarvis_end()
             mic.reset()
