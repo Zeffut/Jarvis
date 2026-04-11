@@ -76,6 +76,8 @@ final class JarvisPanel: NSPanel {
     func open() {
         guard !isVisible, let screen = NSScreen.main else { return }
 
+        mtkView.isPaused = false  // reprend le rendu après orderOut
+
         setFrame(notchFrame(screen: screen), display: false)
         alphaValue = 0
         orderFront(nil)
@@ -101,6 +103,7 @@ final class JarvisPanel: NSPanel {
             animator().alphaValue = 0.0
         }, completionHandler: { [weak self] in
             self?.orderOut(nil)
+            self?.mtkView.isPaused = true  // libère le GPU quand caché
             completion?()
         })
     }
