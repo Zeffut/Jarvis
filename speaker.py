@@ -1,89 +1,86 @@
 from __future__ import annotations
 
-import io
 import os
-import sounddevice as sd
+import subprocess
+import warnings
 import numpy as np
-from elevenlabs import ElevenLabs
-from pydub import AudioSegment
+import sounddevice as sd
 
-from config import ELEVENLABS_VOICE_ID
+warnings.filterwarnings("ignore")
 
+from config import KOKORO_VOICE, KOKORO_SPEED
 
-_client = None
+_CACHE_PATH = os.path.join(os.path.dirname(__file__), ".greeting_cache.npy")
+_MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+_MODEL_PATH = os.path.join(_MODELS_DIR, "kokoro-v1.0.onnx")
+_VOICES_PATH = os.path.join(_MODELS_DIR, "voices-v1.0.bin")
+_RELEASES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+KOKORO_SAMPLE_RATE = 24000
+
+_kokoro = None
+_status_proc: subprocess.Popen | None = None
 _greeting_samples: np.ndarray | None = None
-_greeting_rate: int = 22050
 
 
-def _get_client(api_key: str) -> ElevenLabs:
-    global _client
-    if _client is None:
-        _client = ElevenLabs(api_key=api_key)
-    return _client
+def _get_kokoro():
+    global _kokoro
+    if _kokoro is None:
+        import urllib.request
+        from kokoro_onnx import Kokoro
+        os.makedirs(_MODELS_DIR, exist_ok=True)
+        if not os.path.exists(_MODEL_PATH):
+            print("Téléchargement du modèle Kokoro (~310MB)...", flush=True)
+            urllib.request.urlretrieve(f"{_RELEASES_URL}/kokoro-v1.0.onnx", _MODEL_PATH)
+        if not os.path.exists(_VOICES_PATH):
+            print("Téléchargement des voix Kokoro...", flush=True)
+            urllib.request.urlretrieve(f"{_RELEASES_URL}/voices-v1.0.bin", _VOICES_PATH)
+        _kokoro = Kokoro(_MODEL_PATH, _VOICES_PATH)
+    return _kokoro
 
 
-def _audio_to_samples(audio_bytes: bytes) -> tuple[np.ndarray, int]:
-    audio_seg = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
-    samples = np.array(audio_seg.get_array_of_samples(), dtype=np.float32) / 32768.0
-    if audio_seg.channels == 2:
-        samples = samples.reshape((-1, 2))
-    return samples, audio_seg.frame_rate
-
-
-def preload_greeting(api_key: str, voice_id: str = ELEVENLABS_VOICE_ID) -> None:
-    """Pre-generate 'Oui Monsieur' at startup for instant playback."""
-    global _greeting_samples, _greeting_rate
-
-    cache_path = os.path.join(os.path.dirname(__file__), ".greeting_cache.mp3")
-
-    if os.path.exists(cache_path):
-        with open(cache_path, "rb") as f:
-            _greeting_samples, _greeting_rate = _audio_to_samples(f.read())
-        return
-
-    client = _get_client(api_key)
-    audio_gen = client.text_to_speech.convert(
-        text="Oui Monsieur ?",
-        voice_id=voice_id,
-        model_id="eleven_multilingual_v2",
-        output_format="mp3_44100_128",
+def _synthesize(text: str) -> np.ndarray:
+    """Retourne des samples float32 à KOKORO_SAMPLE_RATE Hz."""
+    kokoro = _get_kokoro()
+    samples, _ = kokoro.create(
+        text,
+        voice=KOKORO_VOICE,
+        speed=KOKORO_SPEED,
+        lang="fr-fr",
     )
-    audio_bytes = b"".join(audio_gen)
-
-    with open(cache_path, "wb") as f:
-        f.write(audio_bytes)
-
-    _greeting_samples, _greeting_rate = _audio_to_samples(audio_bytes)
+    return samples.astype(np.float32)
 
 
-def _wait_playback(samples: np.ndarray, rate: int):
-    """Wait for playback to finish, interruptible by Ctrl+C."""
-    import time
-    duration = len(samples) / rate
-    end = time.time() + duration + 0.1
-    while time.time() < end and sd.get_stream() and sd.get_stream().active:
-        time.sleep(0.05)
+def preload_greeting() -> None:
+    """Pré-génère 'Oui Monsieur ?' au démarrage pour lecture instantanée."""
+    global _greeting_samples
+    if os.path.exists(_CACHE_PATH):
+        _greeting_samples = np.load(_CACHE_PATH)
+        return
+    _greeting_samples = _synthesize("Oui Monsieur ?")
+    np.save(_CACHE_PATH, _greeting_samples)
 
 
 def play_greeting() -> None:
-    """Play the pre-cached 'Oui Monsieur' greeting instantly."""
+    """Joue le greeting pré-caché."""
     if _greeting_samples is not None:
-        sd.play(_greeting_samples, samplerate=_greeting_rate)
-        _wait_playback(_greeting_samples, _greeting_rate)
+        sd.play(_greeting_samples, samplerate=KOKORO_SAMPLE_RATE)
+        sd.wait()
 
 
-def speak(text: str, api_key: str, voice_id: str = ELEVENLABS_VOICE_ID, wait: bool = True) -> None:
-    client = _get_client(api_key)
-    audio_gen = client.text_to_speech.convert(
-        text=text,
-        voice_id=voice_id,
-        model_id="eleven_multilingual_v2",
-        output_format="mp3_44100_128",
+def speak_status(text: str, voice: str = "Thomas") -> None:
+    """Court statut vocal via TTS macOS natif (instantané, pas de modèle)."""
+    global _status_proc
+    if _status_proc and _status_proc.poll() is None:
+        _status_proc.terminate()
+    _status_proc = subprocess.Popen(
+        ["say", "-v", voice, text],
+        stderr=subprocess.DEVNULL,
     )
 
-    audio_bytes = b"".join(audio_gen)
-    samples, rate = _audio_to_samples(audio_bytes)
 
-    sd.play(samples, samplerate=rate)
+def speak(text: str, wait: bool = True) -> None:
+    """Synthétise text via Kokoro et joue via sounddevice."""
+    samples = _synthesize(text)
+    sd.play(samples, samplerate=KOKORO_SAMPLE_RATE)
     if wait:
-        _wait_playback(samples, rate)
+        sd.wait()
