@@ -257,7 +257,7 @@ def conversation_loop(
 def main():
     ui.show_boot()
 
-    cfg = load_config()
+    load_config()
 
     ui.show_loading("Modele Whisper...")
     transcriber = Transcriber()
