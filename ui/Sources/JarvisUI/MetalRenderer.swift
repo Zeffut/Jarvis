@@ -245,8 +245,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             time: time,
             energy: energy,
             rotationSpeed: rotSpeed,
-            viewWidth: Float(view.drawableSize.width),
-            viewHeight: Float(view.drawableSize.height),
+            viewWidth: Float(view.bounds.size.width),
+            viewHeight: Float(view.bounds.size.height),
             stateMode: stateMode
         )
 
