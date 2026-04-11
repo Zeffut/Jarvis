@@ -14,6 +14,8 @@ logging.disable(logging.CRITICAL)
 
 import time
 import threading
+import queue
+import json as _json
 import numpy as np
 import sounddevice as sd
 
@@ -183,7 +185,6 @@ def conversation_loop(
             ui.show_user_text(final_text)
             ui_socket.send_state("thinking")
             # Queue sentences for TTS in background thread
-            import queue
             tts_queue: queue.Queue[str | None] = queue.Queue()
             end_conversation = False
 
@@ -206,7 +207,6 @@ def conversation_loop(
             jarvis_started = False
             for event_type, text in assistant.ask_stream(final_text):
                 if event_type == TOOL_USE:
-                    import json as _json
                     tool_info = _json.loads(text)
                     tool_name = tool_info["name"]
                     ui.show_tool_use(tool_name, tool_info.get("description", ""))

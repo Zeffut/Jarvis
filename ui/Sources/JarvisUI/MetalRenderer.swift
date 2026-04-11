@@ -139,8 +139,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
 
         // Generate 1500 points on sphere surface
         var particles = [Particle]()
-        particles.reserveCapacity(1500)
-        for _ in 0..<1500 {
+        particles.reserveCapacity(particleCount)
+        for _ in 0..<particleCount {
             particles.append(Particle(
                 theta: Float.random(in: 0...(2 * .pi)),
                 phi: acos(Float.random(in: -1...1)),
