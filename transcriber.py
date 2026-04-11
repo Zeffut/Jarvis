@@ -13,18 +13,30 @@ class Transcriber:
     def __init__(self, model: str = WHISPER_MODEL):
         self.model = model
         # Warm up the model on first load
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            sf.write(f.name, np.zeros(16000, dtype=np.float32), 16000)
-            mlx_whisper.transcribe(f.name, path_or_hf_repo=self.model, language="fr")
-            os.unlink(f.name)
+        tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        try:
+            sf.write(tmp.name, np.zeros(16000, dtype=np.float32), 16000)
+            mlx_whisper.transcribe(tmp.name, path_or_hf_repo=self.model, language="fr")
+        finally:
+            tmp.close()
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
 
     def transcribe(self, audio: np.ndarray) -> str:
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            sf.write(f.name, audio, 16000)
+        tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        try:
+            sf.write(tmp.name, audio, 16000)
             result = mlx_whisper.transcribe(
-                f.name,
+                tmp.name,
                 language="fr",
                 path_or_hf_repo=self.model,
             )
-            os.unlink(f.name)
+        finally:
+            tmp.close()
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
         return result["text"].strip()

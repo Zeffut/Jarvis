@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import os
 import subprocess
+import threading
 import warnings
 import numpy as np
 import sounddevice as sd
@@ -19,23 +20,26 @@ _RELEASES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/m
 KOKORO_SAMPLE_RATE = 24000
 
 _kokoro = None
+_kokoro_lock = threading.Lock()          # évite double-init si deux threads simultanés
 _status_proc: subprocess.Popen | None = None
+_status_lock = threading.Lock()          # protège _status_proc contre race poll/terminate
 _greeting_samples: np.ndarray | None = None
 
 
 def _get_kokoro():
     global _kokoro
-    if _kokoro is None:
-        import urllib.request
-        from kokoro_onnx import Kokoro
-        os.makedirs(_MODELS_DIR, exist_ok=True)
-        if not os.path.exists(_MODEL_PATH):
-            print("Téléchargement du modèle Kokoro (~310MB)...", flush=True)
-            urllib.request.urlretrieve(f"{_RELEASES_URL}/kokoro-v1.0.onnx", _MODEL_PATH)
-        if not os.path.exists(_VOICES_PATH):
-            print("Téléchargement des voix Kokoro...", flush=True)
-            urllib.request.urlretrieve(f"{_RELEASES_URL}/voices-v1.0.bin", _VOICES_PATH)
-        _kokoro = Kokoro(_MODEL_PATH, _VOICES_PATH)
+    with _kokoro_lock:
+        if _kokoro is None:
+            import urllib.request
+            from kokoro_onnx import Kokoro
+            os.makedirs(_MODELS_DIR, exist_ok=True)
+            if not os.path.exists(_MODEL_PATH):
+                print("Téléchargement du modèle Kokoro (~310MB)...", flush=True)
+                urllib.request.urlretrieve(f"{_RELEASES_URL}/kokoro-v1.0.onnx", _MODEL_PATH)
+            if not os.path.exists(_VOICES_PATH):
+                print("Téléchargement des voix Kokoro...", flush=True)
+                urllib.request.urlretrieve(f"{_RELEASES_URL}/voices-v1.0.bin", _VOICES_PATH)
+            _kokoro = Kokoro(_MODEL_PATH, _VOICES_PATH)
     return _kokoro
 
 
@@ -71,12 +75,13 @@ def play_greeting() -> None:
 def speak_status(text: str, voice: str = "Thomas") -> None:
     """Court statut vocal via TTS macOS natif (instantané, pas de modèle)."""
     global _status_proc
-    if _status_proc and _status_proc.poll() is None:
-        _status_proc.terminate()
-    _status_proc = subprocess.Popen(
-        ["say", "-v", voice, text],
-        stderr=subprocess.DEVNULL,
-    )
+    with _status_lock:
+        if _status_proc is not None and _status_proc.poll() is None:
+            _status_proc.terminate()
+        _status_proc = subprocess.Popen(
+            ["say", "-v", voice, text],
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def synthesize(text: str) -> np.ndarray:
@@ -95,13 +100,15 @@ def speak(text: str, wait: bool = True) -> None:
 def cleanup() -> None:
     """Libère les ressources TTS à l'exit."""
     global _kokoro, _status_proc
-    if _status_proc and _status_proc.poll() is None:
-        _status_proc.terminate()
-        try:
-            _status_proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            _status_proc.kill()
-    _kokoro = None
+    with _status_lock:
+        if _status_proc is not None and _status_proc.poll() is None:
+            _status_proc.terminate()
+            try:
+                _status_proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                _status_proc.kill()
+    with _kokoro_lock:
+        _kokoro = None
 
 
 atexit.register(cleanup)

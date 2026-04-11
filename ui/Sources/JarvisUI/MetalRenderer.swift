@@ -79,8 +79,8 @@ vertex VertexOut vertex_main(
     float shimmer = 0.65 + 0.35 * sin(u.time * 4.5 + p.phase * 9.0);
 
     // ── Thinking : anneau qui fait des allers-retours haut↔bas ───────────
-    float t = fmod(u.time * 0.75, 2.0 * 3.14159);
-    float sweepPhi = 3.14159 - abs(t - 3.14159);   // triangle wave 0→π→0
+    float t = fmod(u.time * 0.75, 2.0 * M_PI_F);
+    float sweepPhi = M_PI_F - abs(t - M_PI_F);     // triangle wave 0→π→0
     float phiDist = abs(p.phi - sweepPhi);
     float scan = isThinkingF * 0.85 * exp(-phiDist * phiDist * 7.0);
 

@@ -43,8 +43,12 @@ class WakeWordListener:
         def callback(indata, frames, time_info, status):
             nonlocal buffer, has_speech
             chunk = indata[:, 0]
-            buffer[:-len(chunk)] = buffer[len(chunk):]
-            buffer[-len(chunk):] = chunk
+            n = len(chunk)
+            if n >= len(buffer):
+                buffer[:] = chunk[-len(buffer):]  # chunk anormalement large
+            else:
+                buffer[:-n] = buffer[n:]
+                buffer[-n:] = chunk
             if not is_silent(chunk, SILENCE_THRESHOLD):
                 has_speech = True
 
