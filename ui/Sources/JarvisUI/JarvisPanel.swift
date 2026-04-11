@@ -5,11 +5,11 @@ final class JarvisPanel: NSPanel {
     private(set) var renderer: MetalRenderer?
     private var mtkView: MTKView!
 
-    private let panelSize = NSSize(width: 800, height: 600)
+    private let panelSize = NSSize(width: 220, height: 220)
 
     convenience init() {
         self.init(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: 800, height: 600)),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: 220, height: 220)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -22,7 +22,7 @@ final class JarvisPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         level = .floating
-        hasShadow = true
+        hasShadow = false
         isMovable = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         alphaValue = 0
@@ -33,13 +33,13 @@ final class JarvisPanel: NSPanel {
 
         mtkView = MTKView(frame: contentView!.bounds, device: device)
         mtkView.autoresizingMask = [.width, .height]
-        mtkView.clearColor = MTLClearColorMake(0.0, 0.03, 0.08, 0.97)
+        mtkView.clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0)
         mtkView.colorPixelFormat = .bgra8Unorm
         mtkView.isPaused = false
         mtkView.enableSetNeedsDisplay = false
         mtkView.preferredFramesPerSecond = 60
         mtkView.wantsLayer = true
-        mtkView.layer?.cornerRadius = 20
+        mtkView.layer?.cornerRadius = 10
         mtkView.layer?.masksToBounds = true
 
         renderer = MetalRenderer(mtkView: mtkView)
