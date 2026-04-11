@@ -73,9 +73,10 @@ vertex VertexOut vertex_main(
     // ── Shimmer : scintillement par particule ─────────────────────────────
     float shimmer = 0.65 + 0.35 * sin(u.time * 4.5 + p.phase * 9.0);
 
-    // ── Thinking : anneau lumineux qui balaie en latitude ────────────────
+    // ── Thinking : anneau qui fait des allers-retours haut↔bas ───────────
     float isThinking = step(1.5, u.stateMode) * (1.0 - step(2.5, u.stateMode));
-    float sweepPhi = fmod(u.time * 0.75, 3.14159);
+    float t = fmod(u.time * 0.75, 2.0 * 3.14159);
+    float sweepPhi = 3.14159 - abs(t - 3.14159);   // triangle wave 0→π→0
     float phiDist = abs(p.phi - sweepPhi);
     float scan = isThinking * 0.85 * exp(-phiDist * phiDist * 7.0);
 
