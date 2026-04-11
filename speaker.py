@@ -78,6 +78,11 @@ def speak_status(text: str, voice: str = "Thomas") -> None:
     )
 
 
+def synthesize(text: str) -> np.ndarray:
+    """Synthétise text → samples float32 sans jouer. Permet le pipeline overlap."""
+    return _synthesize(text)
+
+
 def speak(text: str, wait: bool = True) -> None:
     """Synthétise text via Kokoro et joue via sounddevice."""
     samples = _synthesize(text)
