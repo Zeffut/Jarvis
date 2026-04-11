@@ -46,11 +46,22 @@ class MicBuffer:
         self.speech_started = False
         self.silence_start: float | None = None
         self.done = False
-        self.muted = False  # True pendant le TTS pour ignorer l'écho
+        self._muted = threading.Event()  # thread-safe : pas de race condition
         self._lock = threading.Lock()
 
+    @property
+    def muted(self) -> bool:
+        return self._muted.is_set()
+
+    @muted.setter
+    def muted(self, value: bool) -> None:
+        if value:
+            self._muted.set()
+        else:
+            self._muted.clear()
+
     def callback(self, indata, frames, time_info, status):
-        if self.muted:
+        if self._muted.is_set():   # lecture atomique — thread-safe
             return
         chunk = indata[:, 0].copy()
 
@@ -183,7 +194,9 @@ def conversation_loop(
             # Final accurate transcription with mlx-whisper turbo
             final_text = transcriber.transcribe(audio)
             if not final_text:
-                break
+                speak_status("Pardon ?")
+                mic.reset()
+                continue  # retenter plutôt que quitter la conversation
 
             ui.show_user_text(final_text)
             ui_socket.send_state("thinking")
@@ -221,58 +234,55 @@ def conversation_loop(
             play_thread.start()
 
             # Collect full response, display tokens, queue sentences for TTS
-            # Buffer tokens to detect [FIN] before displaying
             full_response = ""
             display_buffer = ""
 
-            jarvis_started = False
-            for event_type, text in assistant.ask_stream(final_text):
-                if event_type == TOOL_USE:
-                    tool_info = _json.loads(text)
-                    tool_name = tool_info["name"]
-                    ui.show_tool_use(tool_name, tool_info.get("description", ""))
-                    speak_status(_tool_phrase(tool_name))
-                elif event_type == TOKEN:
-                    if not jarvis_started:
-                        ui.show_jarvis_start()
-                        jarvis_started = True
-                    full_response += text
-                    display_buffer += text
-                    if "[" in display_buffer:
+            try:
+                jarvis_started = False
+                for event_type, text in assistant.ask_stream(final_text):
+                    if event_type == TOOL_USE:
+                        tool_info = _json.loads(text)
+                        tool_name = tool_info["name"]
+                        ui.show_tool_use(tool_name, tool_info.get("description", ""))
+                        speak_status(_tool_phrase(tool_name))
+                    elif event_type == TOKEN:
+                        if not jarvis_started:
+                            ui.show_jarvis_start()
+                            jarvis_started = True
+                        full_response += text
+                        display_buffer += text
+                        # Flush seulement quand pas de [FIN] partiel en attente
                         if END_SIGNAL in display_buffer:
                             before = display_buffer.split(END_SIGNAL)[0]
                             if before:
                                 ui.show_jarvis_token(before)
                             display_buffer = ""
                             end_conversation = True
-                    else:
-                        ui.show_jarvis_token(display_buffer)
-                        display_buffer = ""
-                elif event_type == SENTENCE:
-                    clean = text.replace(END_SIGNAL, "").strip()
-                    # Filtrer les lignes de sources/markdown avant TTS
-                    if clean and not _is_source_line(clean):
-                        synth_queue.put(clean)
-                    if END_SIGNAL in text:
-                        end_conversation = True
+                        elif "[" not in display_buffer:
+                            ui.show_jarvis_token(display_buffer)
+                            display_buffer = ""
+                    elif event_type == SENTENCE:
+                        clean = text.replace(END_SIGNAL, "").strip()
+                        if clean and not _is_source_line(clean):
+                            synth_queue.put(clean)
+                        if END_SIGNAL in text:
+                            end_conversation = True
 
-            # Flush remaining display buffer (minus any [FIN])
-            if display_buffer:
-                clean_display = display_buffer.replace(END_SIGNAL, "")
-                if clean_display:
-                    ui.show_jarvis_token(clean_display)
+                # Flush reste du buffer
+                if display_buffer:
+                    clean_display = display_buffer.replace(END_SIGNAL, "")
+                    if clean_display:
+                        ui.show_jarvis_token(clean_display)
 
-            # Check if entire response is just [FIN]
-            if full_response.strip() == END_SIGNAL:
-                end_conversation = True
+                if full_response.strip() == END_SIGNAL:
+                    end_conversation = True
 
-            # Attendre que le pipeline TTS se vide
-            synth_queue.put(None)
-            synth_thread.join()
-            play_thread.join()
-
-            ui.show_jarvis_end()
-            mic.reset()
+            finally:
+                # Garantit le join même si exception
+                synth_queue.put(None)
+                synth_thread.join(timeout=10)
+                play_thread.join(timeout=10)
+                mic.reset()
 
             if end_conversation:
                 break

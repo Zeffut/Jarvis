@@ -19,7 +19,8 @@ _CREDIT_ERROR = "credit balance is too low"
 class Assistant:
     def __init__(self, model: str = "sonnet"):
         self.model = model
-        self._session_id: str | None = None  # en mémoire uniquement
+        self._session_id: str | None = None
+        self._lock = threading.Lock()  # protège _session_id
 
     def _build_cmd(self, text: str, session_id: str | None = None) -> list[str]:
         cmd = [
@@ -44,19 +45,19 @@ class Assistant:
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,   # PIPE jamais lu = deadlock potentiel
             text=True,
             env=env,
         )
 
         lines_buf: list[str] = []
-        lock = threading.Lock()
+        buf_lock = threading.Lock()
 
         def reader():
             for line in proc.stdout:
                 line = line.strip()
                 if line:
-                    with lock:
+                    with buf_lock:
                         lines_buf.append(line)
 
         threading.Thread(target=reader, daemon=True).start()
@@ -73,11 +74,15 @@ class Assistant:
                 break
             if time.time() > deadline:
                 proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
                 break
 
             time.sleep(0.05)
 
-            with lock:
+            with buf_lock:
                 lines = lines_buf.copy()
                 lines_buf.clear()
 
@@ -89,7 +94,6 @@ class Assistant:
 
                 etype = event.get("type")
 
-                # Capturer le session_id pour la prochaine requête
                 if etype in ("system", "result"):
                     sid = event.get("session_id") or event.get("sessionId")
                     if sid:
@@ -136,30 +140,37 @@ class Assistant:
                         yield TOKEN, result_text
                         sentence_buffer += result_text
 
-        proc.wait()
+        # Attendre la fin du processus avec timeout
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
         if sentence_buffer.strip():
             yield SENTENCE, sentence_buffer.strip()
 
-        # Retourner (session_id, full_reply) via attributs après yield
-        self._last_session_id = new_session_id
-        self._last_reply = full_reply
+        with self._lock:
+            self._last_session_id = new_session_id
+            self._last_reply = full_reply
 
     def ask_stream(self, text: str) -> Generator[tuple[str, str], None, None]:
         """Stream la réponse en temps réel. Gère le fallback crédit après coup."""
-        self._last_session_id = None
-        self._last_reply = ""
+        with self._lock:
+            self._last_session_id = None
+            self._last_reply = ""
+            session_id = self._session_id
 
-        yield from self._run(text, self._session_id)
+        yield from self._run(text, session_id)
 
-        # Post-stream : détecter erreur crédit ou mettre à jour la session
-        full = self._last_reply.lower()
-        if _CREDIT_ERROR in full and self._session_id:
-            # Session corrompue → reset pour le prochain appel (pas de retry mid-stream)
-            self._session_id = None
-        elif self._last_session_id:
-            self._session_id = self._last_session_id
+        with self._lock:
+            full = self._last_reply.lower()
+            if _CREDIT_ERROR in full and self._session_id:
+                self._session_id = None
+            elif self._last_session_id:
+                self._session_id = self._last_session_id
 
     def reset(self, clear_session: bool = False) -> None:
         if clear_session:
-            self._session_id = None
+            with self._lock:
+                self._session_id = None
