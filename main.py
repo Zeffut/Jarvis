@@ -221,13 +221,17 @@ def conversation_loop(
 
             ui.show_user_text(final_text)
             ui_socket.send_state("thinking")
-            # Pipeline TTS deux étages : synthèse en avance pendant que l'audio joue
+            # Pipeline TTS deux étages — pre-synth limité à 1 phrase d'avance
+            # pour que la queue ne déborde pas le rythme de lecture audible.
+            # Display synchro avec l'audio (UI = ce que tu entends, pas ce
+            # que Claude vient juste de générer).
             synth_queue: queue.Queue[str | None] = queue.Queue()
-            play_queue: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=2)
+            play_queue: queue.Queue[tuple[str, np.ndarray] | None] = queue.Queue(maxsize=1)
             end_conversation = False
+            ui_state = {"jarvis_shown": False}
 
             def synth_worker():
-                """Thread 1 : synthétise (Kokoro) → met les samples dans play_queue."""
+                """Thread 1 : synthétise (Kokoro) → (sentence, samples) → play_queue."""
                 while True:
                     sentence = synth_queue.get()
                     if sentence is None:
@@ -235,20 +239,29 @@ def conversation_loop(
                         break
                     samples = synthesize(sentence)
                     try:
-                        play_queue.put(samples, timeout=30)  # évite deadlock si play_worker crash
+                        play_queue.put((sentence, samples), timeout=30)
                     except queue.Full:
                         pass
 
             def play_worker():
-                """Thread 2 : joue les samples dès qu'ils arrivent, sans attendre la synth."""
+                """Thread 2 : affiche + joue chaque phrase. Display synchro avec audio."""
                 while True:
-                    samples = play_queue.get()
-                    if samples is None:
+                    item = play_queue.get()
+                    if item is None:
                         break
+                    sentence, samples = item
+                    if not ui_state["jarvis_shown"]:
+                        ui.show_jarvis_start()
+                        ui_state["jarvis_shown"] = True
+                    ui.show_jarvis_token(sentence + " ")
+                    audio_secs = len(samples) / KOKORO_SAMPLE_RATE
+                    jlog.debug("TTS", f"play start — {audio_secs:.2f}s: {jlog.trunc(sentence, 60)}")
                     ui_socket.send_state("speaking", 0.5)
                     mic.muted = True
+                    t_play = time.time()
                     sd.play(samples, samplerate=KOKORO_SAMPLE_RATE)
                     sd.wait()
+                    jlog.debug("TTS", f"play end — {time.time() - t_play:.2f}s")
                     time.sleep(0.25)  # laisser l'écho s'éteindre
                     mic.muted = False
 
@@ -257,12 +270,11 @@ def conversation_loop(
             synth_thread.start()
             play_thread.start()
 
-            # Collect full response, display tokens, queue sentences for TTS
-            full_response  = ""
-            display_buffer = ""
+            # On collecte juste full_response pour les checks de fin —
+            # le display console est porté par play_worker (synchro audio).
+            full_response = ""
 
             try:
-                jarvis_started = False
                 for event_type, text in assistant.ask_stream(final_text):
                     if event_type == TOOL_USE:
                         import json as _json
@@ -272,22 +284,7 @@ def conversation_loop(
                         synth_queue.put(_tool_phrase(tool_name))
 
                     elif event_type == TOKEN:
-                        if not jarvis_started:
-                            ui.show_jarvis_start()
-                            jarvis_started = True
-                        full_response  += text
-                        display_buffer += text
-
-                        if END_SIGNAL in display_buffer:
-                            before = display_buffer.split(END_SIGNAL)[0]
-                            if before:
-                                ui.show_jarvis_token(before)
-                            display_buffer  = ""
-                            end_conversation = True
-                            jlog.debug("MAIN", "[FIN] detected in stream tokens")
-                        else:
-                            ui.show_jarvis_token(display_buffer)
-                            display_buffer = ""
+                        full_response += text
 
                     elif event_type == SENTENCE:
                         clean = text.replace(END_SIGNAL, "").strip()
