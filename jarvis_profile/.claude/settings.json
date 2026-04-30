@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(date:*)",
+      "Bash(uptime)",
+      "Bash(df:*)",
+      "Bash(top:*)",
+      "Bash(ps:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(curl:*)",
+      "Bash(icalBuddy:*)",
+      "Bash(osascript:*)",
+      "Bash(mdfind:*)",
+      "Bash(pmset:*)",
+      "Bash(ioreg:*)",
+      "Bash(sw_vers)",
+      "WebSearch",
+      "WebFetch",
+      "Read",
+      "Grep",
+      "Glob"
+    ],
+    "deny": [
+      "Bash(rm:*)",
+      "Bash(sudo:*)",
+      "Bash(shutdown:*)",
+      "Bash(reboot:*)",
+      "Write",
+      "Edit"
+    ]
+  }
+}
