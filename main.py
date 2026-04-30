@@ -31,6 +31,7 @@ from transcriber import Transcriber
 from assistant import Assistant, TOKEN, SENTENCE, TOOL_USE
 from speaker import speak, synthesize, preload_greeting, play_greeting, KOKORO_SAMPLE_RATE
 from audio import is_silent
+import jlog
 import ui
 import ui_socket
 
@@ -198,18 +199,25 @@ def conversation_loop(
             first_turn = False
 
             if audio is None:
+                jlog.info("MAIN", "conversation end — audio timeout (no speech)")
                 break
 
             # Final accurate transcription with mlx-whisper turbo
+            t_w = time.time()
             final_text = transcriber.transcribe(audio)
+            dt_w = time.time() - t_w
+            audio_secs = len(audio) / SAMPLE_RATE
             if not final_text:
                 _transcribe_retries += 1
+                jlog.warn("WHISPER", f"empty transcription (audio={audio_secs:.1f}s, {dt_w:.2f}s) — retry {_transcribe_retries}/{MAX_TRANSCRIBE_RETRIES}")
                 if _transcribe_retries >= MAX_TRANSCRIBE_RETRIES:
-                    break  # abandon après 3 échecs consécutifs
+                    jlog.info("MAIN", "conversation end — too many transcribe failures")
+                    break
                 speak("Pardon ?")
                 mic.reset()
                 continue
-            _transcribe_retries = 0  # reset compteur si succès
+            _transcribe_retries = 0
+            jlog.info("WHISPER", f"({dt_w:.2f}s, audio={audio_secs:.1f}s): {jlog.trunc(final_text)}")
 
             ui.show_user_text(final_text)
             ui_socket.send_state("thinking")
@@ -276,6 +284,7 @@ def conversation_loop(
                                 ui.show_jarvis_token(before)
                             display_buffer  = ""
                             end_conversation = True
+                            jlog.debug("MAIN", "[FIN] detected in stream tokens")
                         else:
                             ui.show_jarvis_token(display_buffer)
                             display_buffer = ""
@@ -286,9 +295,11 @@ def conversation_loop(
                             synth_queue.put(clean)
                         if END_SIGNAL in text:
                             end_conversation = True
+                            jlog.debug("MAIN", "[FIN] detected in sentence")
 
                 if full_response.strip() == END_SIGNAL:
                     end_conversation = True
+                    jlog.warn("MAIN", "Jarvis répond [FIN] tout seul — fin prématurée probable")
 
             finally:
                 # Garantit le join même si exception
@@ -298,6 +309,7 @@ def conversation_loop(
                 mic.reset()
 
             if end_conversation:
+                jlog.info("MAIN", "conversation end — [FIN] received")
                 break
 
     ui.show_end_conversation()
@@ -306,6 +318,7 @@ def conversation_loop(
 
 
 def main():
+    jlog.info("MAIN", f"boot — pid={os.getpid()}")
     # Écrire le PID pour permettre à l'UI de tuer le processus proprement
     with open("/tmp/jarvis.pid", "w") as f:
         f.write(str(os.getpid()))
@@ -315,19 +328,28 @@ def main():
     load_config()
 
     ui.show_loading("Modele Whisper...")
+    t0 = time.time()
     transcriber = Transcriber()
+    jlog.info("WHISPER", f"loaded in {time.time() - t0:.2f}s")
 
     ui.show_loading("Claude Code...")
+    t0 = time.time()
     assistant = Assistant()
+    jlog.info("MAIN", f"Assistant init in {time.time() - t0:.2f}s")
 
     ui.show_loading("Detection vocale...")
+    t0 = time.time()
     wake = WakeWordListener()
+    jlog.info("WAKE", f"loaded in {time.time() - t0:.2f}s")
     ui_socket.launch_ui()
 
     ui.show_loading("Synthese vocale...")
+    t0 = time.time()
     preload_greeting()
+    jlog.info("TTS", f"Kokoro greeting preloaded in {time.time() - t0:.2f}s")
 
     ui.show_ready()
+    jlog.info("MAIN", "ready — waiting for wake word")
 
     # Reuse wake word's tiny model for real-time preview
     preview_model = wake.model
@@ -336,11 +358,13 @@ def main():
         while True:
             ui.show_standby()
             wake.listen()
+            jlog.info("WAKE", "wake word detected")
             ui_socket.send_state("listening")
             ui.show_wake()
             play_greeting()
             conversation_loop(transcriber, assistant, preview_model)
     except KeyboardInterrupt:
+        jlog.info("MAIN", "KeyboardInterrupt — shutdown")
         ui.show_shutdown()
     finally:
         wake.cleanup()
@@ -349,6 +373,7 @@ def main():
             os.unlink("/tmp/jarvis.pid")
         except OSError:
             pass
+        jlog.info("MAIN", "exit")
 
 
 if __name__ == "__main__":
