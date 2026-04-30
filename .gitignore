@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
 .env
+
+# Token OAuth + sessions Claude Code isolé du profil Jarvis — JAMAIS commit
+jarvis_profile/.claude_home/
 *.egg-info/
 dist/
 build/
