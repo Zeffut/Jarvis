@@ -292,6 +292,7 @@ def conversation_loop(
                     elif event_type == SENTENCE:
                         clean = text.replace(END_SIGNAL, "").strip()
                         if clean and not _is_source_line(clean):
+                            jlog.info("TTS", f"queue → {jlog.trunc(clean, 100)}")
                             synth_queue.put(clean)
                         if END_SIGNAL in text:
                             end_conversation = True

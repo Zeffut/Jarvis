@@ -4,6 +4,7 @@ import atexit
 import os
 import subprocess
 import threading
+import time
 import warnings
 import numpy as np
 import sounddevice as sd
@@ -11,6 +12,7 @@ import sounddevice as sd
 warnings.filterwarnings("ignore")
 
 from config import KOKORO_VOICE, KOKORO_SPEED
+import jlog
 
 _CACHE_PATH = os.path.join(os.path.dirname(__file__), ".greeting_cache.npy")
 _MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
@@ -46,13 +48,28 @@ def _get_kokoro():
 def _synthesize(text: str) -> np.ndarray:
     """Retourne des samples float32 à KOKORO_SAMPLE_RATE Hz."""
     kokoro = _get_kokoro()
+    t0 = time.time()
     samples, _ = kokoro.create(
         text,
         voice=KOKORO_VOICE,
         speed=KOKORO_SPEED,
         lang="fr-fr",
     )
-    return samples.astype(np.float32)
+    samples = samples.astype(np.float32)
+    dt_synth = time.time() - t0
+    audio_secs = len(samples) / KOKORO_SAMPLE_RATE
+    n_chars = len(text)
+    # Ratio durée_audio / chars — si > ~0.10s/char sur du texte court, suspect
+    # (bégaiement / répétition / phonemizer qui boucle).
+    ratio = audio_secs / max(n_chars, 1)
+    flag = " ⚠ ratio élevé" if (ratio > 0.10 and n_chars < 40) else ""
+    jlog.debug(
+        "TTS",
+        f"synth {audio_secs:.2f}s audio en {dt_synth:.2f}s "
+        f"({n_chars}c, ratio={ratio:.3f}s/c{flag}, voice={KOKORO_VOICE}): "
+        f"{jlog.trunc(text, 80)}"
+    )
+    return samples
 
 
 def preload_greeting() -> None:
