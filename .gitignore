@@ -10,7 +10,7 @@ build/
 .venv/
 .vscode/
 .pytest_cache/
-.greeting_cache.mp3
+.greeting_cache.npy
 test_wake.py
 test_transcribe.py
 models/

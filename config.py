@@ -17,7 +17,7 @@ WHISPER_MODEL = "mlx-community/whisper-turbo"
 #   am_adam      : American male — alternative
 #   ff_siwis     : Féminine française — qualité FR optimale (perte de british)
 # Override : JARVIS_KOKORO_VOICE=am_michael python3 main.py
-KOKORO_VOICE = os.environ.get("JARVIS_KOKORO_VOICE", "bm_george")
+KOKORO_VOICE = os.environ.get("JARVIS_KOKORO_VOICE", "ff_siwis")
 KOKORO_SPEED = float(os.environ.get("JARVIS_KOKORO_SPEED", "1.0"))
 
 # Token de fin de conversation (cf. jarvis_profile/CLAUDE.md)
