@@ -102,6 +102,14 @@ class Assistant:
         # Env isolé : pas de hooks/plugins/MCPs globaux → init quasi-instantané.
         env = os.environ.copy()
         env["CLAUDE_CONFIG_DIR"] = str(CONFIG_DIR)
+        # Forcer l'OAuth du profil — sinon une ANTHROPIC_API_KEY shell-level
+        # prend priorité et tombe sur "Invalid API key" (cas observé).
+        stripped = []
+        for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"):
+            if env.pop(k, None) is not None:
+                stripped.append(k)
+        if stripped:
+            jlog.warn("CLAUDE", f"env stripped (préserve OAuth profil): {stripped}")
         self._proc = subprocess.Popen(
             cmd,
             cwd=str(PROFILE_DIR),
