@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -9,6 +10,11 @@ from pathlib import Path
 from typing import Generator, Optional
 
 import jlog
+
+# Frontière de phrase pour le streaming TTS : ponctuation forte suivie
+# d'un whitespace, OU une newline seule. Évite de couper "Sonnet 4.6" en
+# "Sonnet 4." | "6" — bug observé en prod.
+_SENTENCE_BOUNDARY = re.compile(r"[.!?][\s\n]|\n")
 
 # Dossier qui contient le profil Jarvis (CLAUDE.md + .claude/settings.json).
 # claude tourne avec ce dossier comme cwd → charge le profil project-scoped.
@@ -219,14 +225,18 @@ class Assistant:
                                 full_response += token
                                 sentence_buf += token
                                 yield TOKEN, token
-                                for sep in (".", "!", "?", "\n"):
-                                    if sep in sentence_buf:
-                                        parts = sentence_buf.split(sep, 1)
-                                        sentence = (parts[0] + sep).strip()
-                                        sentence_buf = parts[1]
-                                        if sentence:
-                                            yield SENTENCE, sentence
+                                # Cherche TOUTES les frontières dans le buffer
+                                # courant — une seule passe de tokens peut
+                                # contenir plusieurs phrases si gros chunk.
+                                while True:
+                                    m = _SENTENCE_BOUNDARY.search(sentence_buf)
+                                    if not m:
                                         break
+                                    end = m.end()
+                                    sentence = sentence_buf[:end].strip()
+                                    sentence_buf = sentence_buf[end:]
+                                    if sentence:
+                                        yield SENTENCE, sentence
 
                 # ── Tool uses + dump des text blocks pour debug ─────
                 elif etype == "assistant":
