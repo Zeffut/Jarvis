@@ -181,6 +181,21 @@ class Assistant:
 
                 # ── Fin du tour ──────────────────────────────────────
                 if etype == "result":
+                    if not _internal:
+                        # Tente plusieurs schémas (Anthropic / Claude Code)
+                        usage = (event.get("usage")
+                                 or event.get("message", {}).get("usage")
+                                 or {})
+                        sub = event.get("subtype", "")
+                        result_text = event.get("result", "")
+                        jlog.debug(
+                            "CLAUDE",
+                            f"result subtype={sub!r} "
+                            f"in={usage.get('input_tokens', '?')}t "
+                            f"out={usage.get('output_tokens', '?')}t "
+                            f"cache_read={usage.get('cache_read_input_tokens', '?')}t "
+                            f"text={jlog.trunc(str(result_text), 120)!r}"
+                        )
                     break
 
                 # ── Streaming temps réel des tokens texte ───────────
@@ -205,9 +220,19 @@ class Assistant:
                                             yield SENTENCE, sentence
                                         break
 
-                # ── Tool uses (1 par bloc, dédup par id) ────────────
+                # ── Tool uses + dump des text blocks pour debug ─────
                 elif etype == "assistant":
                     msg_content = event.get("message", {}).get("content", [])
+                    if not _internal:
+                        # Log debug : tous les blocks et leur type
+                        for block in msg_content:
+                            btype = block.get("type", "?")
+                            if btype == "text":
+                                jlog.debug("CLAUDE", f"text block: {jlog.trunc(block.get('text', ''), 200)!r}")
+                            elif btype == "thinking":
+                                jlog.debug("CLAUDE", f"thinking block ({len(block.get('thinking', ''))} chars)")
+                            elif btype != "tool_use":
+                                jlog.debug("CLAUDE", f"unknown block type={btype}: {jlog.trunc(str(block), 200)}")
                     for block in msg_content:
                         if block.get("type") != "tool_use":
                             continue
