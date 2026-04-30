@@ -15,7 +15,6 @@ logging.disable(logging.CRITICAL)
 import time
 import threading
 import queue
-import json as _json
 import numpy as np
 import sounddevice as sd
 
@@ -30,12 +29,12 @@ from config import (
 from wake_word import WakeWordListener
 from transcriber import Transcriber
 from assistant import Assistant, TOKEN, SENTENCE, TOOL_USE
-from speaker import speak, speak_status, synthesize, preload_greeting, play_greeting, KOKORO_SAMPLE_RATE
+from speaker import speak, synthesize, preload_greeting, play_greeting, KOKORO_SAMPLE_RATE
 from audio import is_silent
 import ui
 import ui_socket
 
-PREVIEW_INTERVAL = 0.4       # seconds between preview transcriptions
+PREVIEW_INTERVAL = 0.08      # seconds between preview transcriptions
 MAX_RECORDING_SECONDS = 120  # sécurité : arrêt même si speech continu
 MAX_TRANSCRIBE_RETRIES = 3   # max "Pardon ?" avant de quitter
 
@@ -207,7 +206,7 @@ def conversation_loop(
                 _transcribe_retries += 1
                 if _transcribe_retries >= MAX_TRANSCRIBE_RETRIES:
                     break  # abandon après 3 échecs consécutifs
-                speak_status("Pardon ?")
+                speak("Pardon ?")
                 mic.reset()
                 continue
             _transcribe_retries = 0  # reset compteur si succès
@@ -251,45 +250,42 @@ def conversation_loop(
             play_thread.start()
 
             # Collect full response, display tokens, queue sentences for TTS
-            full_response = ""
+            full_response  = ""
             display_buffer = ""
 
             try:
                 jarvis_started = False
                 for event_type, text in assistant.ask_stream(final_text):
                     if event_type == TOOL_USE:
+                        import json as _json
                         tool_info = _json.loads(text)
                         tool_name = tool_info["name"]
                         ui.show_tool_use(tool_name, tool_info.get("description", ""))
-                        speak_status(_tool_phrase(tool_name))
+                        synth_queue.put(_tool_phrase(tool_name))
+
                     elif event_type == TOKEN:
                         if not jarvis_started:
                             ui.show_jarvis_start()
                             jarvis_started = True
-                        full_response += text
+                        full_response  += text
                         display_buffer += text
-                        # Flush seulement quand pas de [FIN] partiel en attente
+
                         if END_SIGNAL in display_buffer:
                             before = display_buffer.split(END_SIGNAL)[0]
                             if before:
                                 ui.show_jarvis_token(before)
-                            display_buffer = ""
+                            display_buffer  = ""
                             end_conversation = True
-                        elif "[" not in display_buffer:
+                        else:
                             ui.show_jarvis_token(display_buffer)
                             display_buffer = ""
+
                     elif event_type == SENTENCE:
                         clean = text.replace(END_SIGNAL, "").strip()
                         if clean and not _is_source_line(clean):
                             synth_queue.put(clean)
                         if END_SIGNAL in text:
                             end_conversation = True
-
-                # Flush reste du buffer
-                if display_buffer:
-                    clean_display = display_buffer.replace(END_SIGNAL, "")
-                    if clean_display:
-                        ui.show_jarvis_token(clean_display)
 
                 if full_response.strip() == END_SIGNAL:
                     end_conversation = True
@@ -310,6 +306,10 @@ def conversation_loop(
 
 
 def main():
+    # Écrire le PID pour permettre à l'UI de tuer le processus proprement
+    with open("/tmp/jarvis.pid", "w") as f:
+        f.write(str(os.getpid()))
+
     ui.show_boot()
 
     load_config()
@@ -344,6 +344,11 @@ def main():
         ui.show_shutdown()
     finally:
         wake.cleanup()
+        assistant.shutdown()
+        try:
+            os.unlink("/tmp/jarvis.pid")
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
