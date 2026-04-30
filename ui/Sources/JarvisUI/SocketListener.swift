@@ -1,8 +1,13 @@
 import Foundation
 
 struct JarvisMessage {
-    let state: String      // "standby" | "listening" | "thinking" | "speaking"
-    let amplitude: Float   // 0.0–1.0
+    let state: String               // standby | listening | thinking | speaking
+                                    // display | text_start | text_token | text_end
+                                    // browser_open | browser_close
+    let amplitude: Float            // 0.0–1.0
+    let displayContent: [String: Any]?  // présent si state == "display"
+    let token: String?              // présent si state == "text_token"
+    let url: String?                // présent si state == "browser_open"
 }
 
 /// Écoute /tmp/jarvis-ui.sock, parse les messages JSON et les diffuse via NotificationCenter.
@@ -81,8 +86,12 @@ final class SocketListener {
             let state = json["state"] as? String
         else { return }
 
-        let amplitude = (json["amplitude"] as? Double).map { Float($0) } ?? 0.0
-        let msg = JarvisMessage(state: state, amplitude: amplitude)
+        let amplitude      = (json["amplitude"] as? Double).map { Float($0) } ?? 0.0
+        let displayContent = json["content"] as? [String: Any]
+        let token          = json["token"]   as? String
+        let url            = json["url"]     as? String
+        let msg = JarvisMessage(state: state, amplitude: amplitude,
+                                displayContent: displayContent, token: token, url: url)
 
         DispatchQueue.main.async {
             NotificationCenter.default.post(
