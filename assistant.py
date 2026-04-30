@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Generator, Optional
 
+import jlog
+
 # Dossier qui contient le profil Jarvis (CLAUDE.md + .claude/settings.json).
 # claude tourne avec ce dossier comme cwd → charge le profil project-scoped.
 PROFILE_DIR = Path(__file__).parent / "jarvis_profile"
@@ -58,24 +60,29 @@ class Assistant:
         threading.Thread(target=self._keepalive_loop, daemon=True).start()
 
     def _warmup(self) -> None:
+        jlog.debug("CLAUDE", "warmup ping (cache cold) — start")
+        t = time.time()
         try:
-            for _ in self.ask_stream("ping"):
+            for _ in self.ask_stream("ping", _internal=True):
                 pass
-        except Exception:
-            pass
+            jlog.info("CLAUDE", f"warmup done in {time.time() - t:.2f}s — cache warm")
+        except Exception as e:
+            jlog.warn("CLAUDE", f"warmup failed: {e}")
 
     def _keepalive_loop(self) -> None:
         while not self._shutdown_event.is_set():
             if self._shutdown_event.wait(timeout=KEEPALIVE_CHECK):
                 return
+            elapsed = time.time() - self._last_request_time
             # Skip si une vraie requête a chauffé le cache récemment
-            if time.time() - self._last_request_time < KEEPALIVE_INTERVAL:
+            if elapsed < KEEPALIVE_INTERVAL:
                 continue
+            jlog.debug("CLAUDE", f"keepalive ping (idle {elapsed:.0f}s)")
             try:
-                for _ in self.ask_stream("ping"):
+                for _ in self.ask_stream("ping", _internal=True):
                     pass
-            except Exception:
-                pass
+            except Exception as e:
+                jlog.warn("CLAUDE", f"keepalive failed: {e}")
 
     # ─────────────────────────────────────────────────────────────────
     # Lifecycle subprocess
@@ -105,6 +112,7 @@ class Assistant:
             text=True,
             bufsize=1,
         )
+        jlog.info("CLAUDE", f"subprocess up — pid={self._proc.pid}, model={model}, cwd={PROFILE_DIR.name}")
         # NB : claude en mode --input-format=stream-json n'émet rien tant qu'il
         # n'a pas reçu de message utilisateur (pas même l'événement init).
         # Donc on ne bloque PAS ici — le proc est prêt à recevoir, point.
@@ -117,11 +125,23 @@ class Assistant:
     # API publique
     # ─────────────────────────────────────────────────────────────────
 
-    def ask_stream(self, text: str) -> Generator[tuple[str, str], None, None]:
+    def ask_stream(
+        self,
+        text: str,
+        *,
+        _internal: bool = False,
+    ) -> Generator[tuple[str, str], None, None]:
+        """Génère TOKEN/SENTENCE/TOOL_USE pour la réponse de Claude.
+
+        `_internal=True` : warm-up / keep-alive — logs en DEBUG, pas de bruit.
+        """
         with self._lock:
             self._ensure_alive()
             assert self._proc and self._proc.stdin and self._proc.stdout
             self._last_request_time = time.time()
+
+            if not _internal:
+                jlog.info("CLAUDE", f"→ user: {jlog.trunc(text)}")
 
             # Pousser le message utilisateur sur stdin
             user_msg = json.dumps({
@@ -134,13 +154,17 @@ class Assistant:
             try:
                 self._proc.stdin.write(user_msg + "\n")
                 self._proc.stdin.flush()
-            except (BrokenPipeError, OSError):
-                # Le proc est mort — relance puis réessaye
+            except (BrokenPipeError, OSError) as e:
+                jlog.warn("CLAUDE", f"stdin pipe broken ({e}) — restart subprocess")
                 self._start()
                 assert self._proc.stdin
                 self._proc.stdin.write(user_msg + "\n")
                 self._proc.stdin.flush()
 
+            t_start = time.time()
+            t_first_token: Optional[float] = None
+            full_response = ""
+            tools_log: list[str] = []
             sentence_buf = ""
             seen_tools: set[str] = set()
 
@@ -167,6 +191,9 @@ class Assistant:
                         if delta.get("type") == "text_delta":
                             token = delta.get("text", "")
                             if token:
+                                if t_first_token is None:
+                                    t_first_token = time.time() - t_start
+                                full_response += token
                                 sentence_buf += token
                                 yield TOKEN, token
                                 for sep in (".", "!", "?", "\n"):
@@ -201,6 +228,9 @@ class Assistant:
                             or tool_input.get("file_path")
                             or ""
                         )
+                        if not _internal:
+                            jlog.info("TOOL", f"{tool_name}: {jlog.trunc(str(desc), 100)}")
+                        tools_log.append(tool_name)
                         yield TOOL_USE, json.dumps({
                             "name": tool_name,
                             "description": str(desc)[:120],
@@ -209,6 +239,18 @@ class Assistant:
             # Reste de buffer non terminé par une ponctuation
             if sentence_buf.strip():
                 yield SENTENCE, sentence_buf.strip()
+
+            dt_total = time.time() - t_start
+            ft = t_first_token if t_first_token is not None else dt_total
+            if _internal:
+                jlog.debug("CLAUDE", f"internal ping done in {dt_total:.2f}s")
+            else:
+                tools_str = f", tools={tools_log}" if tools_log else ""
+                jlog.info(
+                    "CLAUDE",
+                    f"← ({ft:.2f}s 1st / {dt_total:.2f}s tot{tools_str}): "
+                    f"{jlog.trunc(full_response) if full_response else '<empty>'}"
+                )
 
     def reset(self, clear_session: bool = False) -> None:
         """Le subprocess reste warm. On NE redémarre PAS — le contexte
@@ -236,6 +278,7 @@ class Assistant:
 
     def shutdown(self) -> None:
         """Arrêt propre — appelé à la fermeture de Jarvis."""
+        jlog.info("CLAUDE", "subprocess shutdown")
         self._shutdown_event.set()
         with self._lock:
             if self._proc and self._proc.poll() is None:
