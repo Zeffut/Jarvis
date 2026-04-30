@@ -452,6 +452,11 @@ final class JarvisPanel: NSPanel {
     }
 
     func update(state: String, amplitude: Float) {
+        // Tout state actif (listening/thinking/speaking…) annule un closeTimer
+        // pending d'un standby précédent — sinon le panel se ferme au milieu
+        // d'une nouvelle conversation.
+        closeTimer?.invalidate()
+        closeTimer = nil
         renderer?.setState(state, amplitude: amplitude)
     }
 }
