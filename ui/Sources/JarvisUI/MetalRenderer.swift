@@ -24,9 +24,10 @@ struct Uniforms {
     float colorR;
     float colorG;
     float colorB;
-    float stateMode;    // 0=standby 1=listening 2=thinking 3=speaking
-    float transitionT;  // 0=invisible → 1=pleinement visible
-    float transitionDir;// +1=apparition  -1=disparition  0=stable
+    float stateMode;     // 0=standby 1=listening 2=thinking 3=speaking
+    float transitionT;   // 0=invisible → 1=pleinement visible
+    float transitionDir; // +1=apparition  -1=disparition  0=stable
+    float sphereScale;   // 1.0=taille normale, >1=agrandie pour plein écran
 };
 
 struct VertexOut {
@@ -61,7 +62,7 @@ vertex VertexOut vertex_main(
     // ── Pulse total ───────────────────────────────────────────────────────
     float totalEnergy = u.energy + breathe;
     float pulse = totalEnergy * 22.0 * sin(u.time * 2.8 + p.phase) + ripple + burst;
-    float r = 100.0 + pulse;
+    float r = (100.0 + pulse) * u.sphereScale;
 
     float x3 = r * sin(p.phi) * cos(p.theta + rotY);
     float y3 = r * cos(p.phi);
@@ -112,7 +113,7 @@ vertex VertexOut vertex_main(
     // ── Taille des points ─────────────────────────────────────────────────
     float scale = fov / zd;
     float speakBoost = isSpeaking  * p.baseAlpha * u.energy * 1.2;
-    float sz = max(0.5, p.baseSize * scale * (1.0 + totalEnergy * 0.9 + speakBoost));
+    float sz = max(0.5, p.baseSize * scale * (1.0 + totalEnergy * 0.9 + speakBoost) * u.sphereScale);
 
     VertexOut out;
     out.position = float4(ndc, 0.0, 1.0);
@@ -160,6 +161,7 @@ private struct Uniforms {
     var stateMode: Float = 0.0
     var transitionT: Float = 1.0
     var transitionDir: Float = 0.0
+    var sphereScale: Float = 1.0
 }
 
 // MARK: - Renderer
@@ -186,6 +188,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     // Progression de la transition shader (0=invisible, 1=visible)
     private var transitionT: Float = 1.0
     private var transitionDir: Float = 0.0   // +1 apparition, -1 disparition
+
+    var sphereScale: Float = 1.0    // réglé par JarvisPanel selon la taille de la vue
 
     init?(mtkView: MTKView) {
         guard
@@ -257,7 +261,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         switch state {
         case "listening":
             targetStateMode = 1.0
-            targetEnergy    = 0.25 + amplitude * 0.65
+            targetEnergy    = 0.15 + min(1.0, amplitude * 8.0)
             targetRotSpeed  = 0.16
         case "thinking":
             targetStateMode = 2.0
@@ -294,8 +298,9 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
 
         // Tout lerpe à la même cadence — aucun paramètre ne saute
         let k: Float = 0.032
+        let eK: Float = (currentState == "listening") ? 0.15 : k
         stateMode += (targetStateMode - stateMode) * k
-        energy    += (targetEnergy    - energy)    * k
+        energy    += (targetEnergy    - energy)    * eK
         rotSpeed  += (targetRotSpeed  - rotSpeed)  * k
 
         guard
@@ -315,7 +320,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             viewHeight: Float(view.bounds.size.height) * 2.0,
             stateMode: stateMode,
             transitionT: transitionT,
-            transitionDir: transitionDir
+            transitionDir: transitionDir,
+            sphereScale: sphereScale
         )
 
         encoder.setRenderPipelineState(pipelineState)
