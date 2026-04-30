@@ -10,8 +10,15 @@ CONVERSATION_TIMEOUT = 5.0
 WHISPER_MODEL = "mlx-community/whisper-turbo"
 
 # TTS Kokoro
-KOKORO_VOICE = "bm_george"  # British male — voix Jarvis
-KOKORO_SPEED = 1.0
+# Voix Kokoro disponibles (extraits) :
+#   bm_george    : British male  — accent british, bégaie parfois sur le français
+#   bm_lewis     : British male  — alternative british
+#   am_michael   : American male — meilleur sur les phonèmes FR
+#   am_adam      : American male — alternative
+#   ff_siwis     : Féminine française — qualité FR optimale (perte de british)
+# Override : JARVIS_KOKORO_VOICE=am_michael python3 main.py
+KOKORO_VOICE = os.environ.get("JARVIS_KOKORO_VOICE", "bm_george")
+KOKORO_SPEED = float(os.environ.get("JARVIS_KOKORO_SPEED", "1.0"))
 
 # Token de fin de conversation (cf. jarvis_profile/CLAUDE.md)
 END_SIGNAL = "[FIN]"
