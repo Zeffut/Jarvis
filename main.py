@@ -342,6 +342,7 @@ def main():
     t0 = time.time()
     wake = WakeWordListener()
     jlog.info("WAKE", f"loaded in {time.time() - t0:.2f}s")
+    jlog.info("UI", "Swift panel " + ("enabled" if ui_socket.UI_ENABLED else "disabled (JARVIS_UI=1 to enable)"))
     ui_socket.launch_ui()
 
     ui.show_loading("Synthese vocale...")

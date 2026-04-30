@@ -10,9 +10,15 @@ _UI_BINARY = os.path.join(os.path.dirname(__file__), "ui/.build/release/JarvisUI
 
 _VALID_STATES = frozenset({"standby", "listening", "thinking", "speaking"})
 
+# Toggle UI Swift — OFF par défaut pour focus backend.
+# Réactive : JARVIS_UI=1 python3 main.py
+UI_ENABLED = os.environ.get("JARVIS_UI", "0") == "1"
+
 
 def launch_ui() -> None:
-    """Lance l'app Swift en arrière-plan si le binaire est présent."""
+    """Lance l'app Swift en arrière-plan si activée et binaire présent."""
+    if not UI_ENABLED:
+        return
     if os.path.exists(_UI_BINARY):
         subprocess.Popen(
             [_UI_BINARY],
@@ -67,6 +73,8 @@ def _send_to(
     url: str | None = None,
 ) -> None:
     """Bas niveau — permet d'injecter un path custom en test."""
+    if not UI_ENABLED:
+        return
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
             s.settimeout(0.15)
