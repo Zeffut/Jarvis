@@ -66,6 +66,26 @@ def send_browser_close() -> None:
     _send_to(SOCKET_PATH, "browser_close", 0.0)
 
 
+def send_question(tool_use_id: str, prompt: str, choices: list[dict]) -> None:
+    """Envoie une question à l'UI. choices = [{"id": "0", "label": "Sarah"}, ...]"""
+    if not UI_ENABLED:
+        return
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(0.15)
+            s.connect(SOCKET_PATH)
+            payload = {
+                "state": "question",
+                "amplitude": 0.0,
+                "tool_use_id": tool_use_id,
+                "question": prompt,
+                "choices": choices,
+            }
+            s.sendall(json.dumps(payload).encode())
+    except Exception:
+        pass
+
+
 def _send_to(
     path: str,
     state: str,

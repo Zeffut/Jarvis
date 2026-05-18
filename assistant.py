@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Generator, Optional
 
 import jlog
+import ui_socket
 
 # Frontière de phrase pour le streaming TTS : ponctuation forte suivie
 # d'un whitespace, OU une newline seule. Évite de couper "Sonnet 4.6" en
@@ -58,7 +59,14 @@ class Assistant:
         self._stderr_file = open(STDERR_LOG, "w", buffering=1)
         self._shutdown_event = threading.Event()
         self._last_request_time = 0.0
+        # Map tool_use_id → label de réponse user, set par EventListener.
+        self._pending_choices: dict[str, str] = {}
+        self._choice_events: dict[str, threading.Event] = {}
+        self._choice_lock = threading.Lock()
         self._start()
+        # Lance le EventListener une seule fois pour recevoir les clics UI.
+        self._event_listener = ui_socket.EventListener(callback=self._on_ui_event)
+        self._event_listener.start()
         # Warm-up : ingère CLAUDE.md dans le cache PENDANT que Whisper/Kokoro
         # chargent en parallèle. Au 1er « Jarvis », le cache est déjà chaud.
         threading.Thread(target=self._warmup, daemon=True).start()
@@ -89,6 +97,75 @@ class Assistant:
                     pass
             except Exception as e:
                 jlog.warn("CLAUDE", f"keepalive failed: {e}")
+
+    # ─────────────────────────────────────────────────────────────────
+    # AskUserQuestion — interception + injection tool_result
+    # ─────────────────────────────────────────────────────────────────
+
+    def _on_ui_event(self, event: dict) -> None:
+        if event.get("type") != "choice":
+            return
+        tool_use_id = event.get("tool_use_id", "")
+        label = event.get("label", "")
+        with self._choice_lock:
+            self._pending_choices[tool_use_id] = label
+            evt = self._choice_events.get(tool_use_id)
+        if evt is not None:
+            evt.set()
+
+    def _wait_for_choice(self, tool_use_id: str, timeout: float = 30.0) -> str:
+        evt = threading.Event()
+        with self._choice_lock:
+            self._choice_events[tool_use_id] = evt
+            if tool_use_id in self._pending_choices:
+                return self._pending_choices.pop(tool_use_id)
+        received = evt.wait(timeout)
+        with self._choice_lock:
+            self._choice_events.pop(tool_use_id, None)
+            label = self._pending_choices.pop(tool_use_id, None)
+        if not received or label is None:
+            return "[timeout]"
+        return label
+
+    def _handle_askuserquestion(self, tool_id: str, question: str,
+                                options: list[dict]) -> None:
+        """Intercepte un tool_use AskUserQuestion :
+           1. Envoie la question sur le socket UI
+           2. Attend une réponse via EventListener
+           3. Injecte un tool_result dans le stream stdin de claude
+        """
+        choices = [{"id": str(i), "label": opt.get("label", f"opt{i}")}
+                   for i, opt in enumerate(options)]
+        jlog.info("CLAUDE", f"? AskUserQuestion: {jlog.trunc(question, 80)} → {len(choices)} choix")
+        ui_socket.send_question(tool_id, question, choices)
+        label = self._wait_for_choice(tool_id, timeout=30.0)
+        jlog.info("CLAUDE", f"? AskUserQuestion ← {label!r}")
+
+        tool_result_msg = json.dumps({
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": label,
+                    }
+                ],
+            },
+        })
+        self._write_to_stdin(tool_result_msg + "\n")
+        # Reset l'UI au compact (la question est résolue).
+        ui_socket.send_state("standby")
+
+    def _write_to_stdin(self, data: str) -> None:
+        """Centralise l'écriture sur stdin pour permettre le test/mock."""
+        if hasattr(self, "_stdin_write_capture"):
+            self._stdin_write_capture(data)
+            return
+        assert self._proc and self._proc.stdin
+        self._proc.stdin.write(data)
+        self._proc.stdin.flush()
 
     # ─────────────────────────────────────────────────────────────────
     # Lifecycle subprocess
@@ -261,6 +338,19 @@ class Assistant:
                             seen_tools.add(tool_id)
                         tool_name = block.get("name", "")
                         tool_input = block.get("input", {}) or {}
+                        if tool_name == "AskUserQuestion":
+                            questions_list = tool_input.get("questions", [])
+                            if questions_list:
+                                q = questions_list[0]
+                                if len(questions_list) > 1:
+                                    jlog.warn("CLAUDE", f"AskUserQuestion: {len(questions_list)} questions, V1 ne prend que la première")
+                                self._handle_askuserquestion(
+                                    tool_id=tool_id,
+                                    question=q.get("question", ""),
+                                    options=q.get("options", []),
+                                )
+                            # Ne pas yield TOOL_USE pour AskUserQuestion (c'est une interaction user, pas un outil externe).
+                            continue
                         desc = (
                             tool_input.get("description")
                             or tool_input.get("command")
