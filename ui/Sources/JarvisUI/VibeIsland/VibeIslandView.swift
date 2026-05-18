@@ -22,15 +22,33 @@ struct VibeQuestion: Equatable {
 struct VibeIslandView: View {
     @ObservedObject var model: VibeIslandModel
 
+    private var arcState: ArcReactorState {
+        ArcReactorState(rawValue: model.state) ?? .standby
+    }
+
     var body: some View {
-        RoundedRectangle(cornerRadius: 18)
-            .fill(Color.black)
-            .frame(width: 160, height: 30)
-            .overlay(
-                Text(model.state)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white)
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        HStack(spacing: 8) {
+            ArcReactorView(state: arcState, size: 18)
+                .padding(.leading, 8)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.85))
+            Spacer()
+        }
+        .frame(width: 160, height: 30)
+        .background(
+            RoundedRectangle(cornerRadius: 15)
+                .fill(Color.black)
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var label: String {
+        switch arcState {
+        case .standby:   return "Jarvis"
+        case .listening: return "Listening"
+        case .thinking:  return "Thinking"
+        case .speaking:  return "Speaking"
+        }
     }
 }
