@@ -111,12 +111,14 @@ class EventListener:
         self._server: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
+        self._lock = threading.Lock()
 
     def start(self) -> None:
-        if self._thread is not None:
-            return
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        with self._lock:
+            if self._thread is not None:
+                return
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
 
     def stop(self) -> None:
         self._stop.set()
@@ -125,6 +127,8 @@ class EventListener:
                 self._server.close()
             except OSError:
                 pass
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
         try:
             os.unlink(self._path)
         except FileNotFoundError:
