@@ -8,7 +8,7 @@ final class VibeIslandPanel: NSPanel {
 
     convenience init() {
         self.init(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: 200, height: 60)),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: 400, height: 60)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false

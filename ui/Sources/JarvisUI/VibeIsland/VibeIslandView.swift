@@ -3,17 +3,20 @@ import SwiftUI
 /// Source de vérité pour l'UI Vibe Island. Mis à jour depuis AppDelegate.
 @MainActor
 final class VibeIslandModel: ObservableObject {
-    @Published var state: String = "standby" {
-        didSet { notifyModeChange() }
-    }
-    @Published var toolName: String? = nil {
-        didSet { notifyModeChange() }
-    }
-    @Published var question: VibeQuestion? = nil {
-        didSet { notifyModeChange() }
-    }
+    @Published var state: String = "standby"
+    @Published var toolName: String? = nil
+    @Published var question: VibeQuestion? = nil
 
     var onModeChange: ((VibeIslandView.Mode) -> Void)?
+
+    /// Met à jour les trois champs en bloc et notifie le changement de mode
+    /// une seule fois — évite trois redimensionnements consécutifs du NSPanel.
+    func apply(state: String, toolName: String?, question: VibeQuestion?) {
+        self.state = state
+        self.toolName = toolName
+        self.question = question
+        notifyModeChange()
+    }
 
     private func notifyModeChange() {
         let mode: VibeIslandView.Mode

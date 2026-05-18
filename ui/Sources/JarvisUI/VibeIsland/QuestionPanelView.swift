@@ -33,7 +33,7 @@ struct QuestionPanelView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 16)
         }
-        .frame(width: 380)
+        .frame(width: 400)
         .background(
             RoundedRectangle(cornerRadius: 22)
                 .fill(Color.black)
@@ -68,7 +68,7 @@ private struct ChoiceButton: View {
                 )
         }
         .buttonStyle(.plain)
-        .scaleEffect(hovering ? 1.02 : clickScale)
+        .scaleEffect(clickScale != 1.0 ? clickScale : (hovering ? 1.02 : 1.0))
         .animation(.easeInOut(duration: 0.18), value: hovering)
         .animation(.easeInOut(duration: 0.1), value: clickScale)
         .onHover { hovering = $0 }

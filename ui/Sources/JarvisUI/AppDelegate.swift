@@ -22,9 +22,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func handleMessage(_ notification: Notification) {
         guard let msg = notification.object as? JarvisMessage else { return }
         Task { @MainActor in
-            self.panel?.stateModel.state = msg.state
-            self.panel?.stateModel.toolName = msg.toolName
-            self.panel?.stateModel.question = msg.question
+            self.panel?.stateModel.apply(
+                state: msg.state,
+                toolName: msg.toolName,
+                question: msg.question
+            )
         }
     }
 
