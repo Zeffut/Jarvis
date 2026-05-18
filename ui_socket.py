@@ -4,6 +4,8 @@ import json
 import os
 import socket
 import subprocess
+import threading
+from typing import Callable
 
 SOCKET_PATH = "/tmp/jarvis-ui.sock"
 _UI_BINARY = os.path.join(os.path.dirname(__file__), "ui/.build/release/JarvisUI")
@@ -92,3 +94,73 @@ def _send_to(
             s.sendall(json.dumps(payload).encode())
     except Exception:
         pass
+
+
+EVENTS_SOCKET_PATH = "/tmp/jarvis-ui-events.sock"
+
+
+class EventListener:
+    """Thread daemon qui écoute /tmp/jarvis-ui-events.sock et appelle
+    callback(event_dict) pour chaque message reçu (un par connexion).
+    """
+
+    def __init__(self, socket_path: str = EVENTS_SOCKET_PATH,
+                 callback: Callable[[dict], None] = lambda e: None):
+        self._path = socket_path
+        self._callback = callback
+        self._server: socket.socket | None = None
+        self._thread: threading.Thread | None = None
+        self._stop = threading.Event()
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._server is not None:
+            try:
+                self._server.close()
+            except OSError:
+                pass
+        try:
+            os.unlink(self._path)
+        except FileNotFoundError:
+            pass
+
+    def _run(self) -> None:
+        try:
+            os.unlink(self._path)
+        except FileNotFoundError:
+            pass
+        self._server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._server.bind(self._path)
+        os.chmod(self._path, 0o600)
+        self._server.listen(8)
+        self._server.settimeout(0.5)
+        while not self._stop.is_set():
+            try:
+                conn, _ = self._server.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            with conn:
+                data = b""
+                while True:
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        break
+                    data += chunk
+            if not data:
+                continue
+            try:
+                event = json.loads(data.decode())
+            except Exception:
+                continue
+            try:
+                self._callback(event)
+            except Exception:
+                pass

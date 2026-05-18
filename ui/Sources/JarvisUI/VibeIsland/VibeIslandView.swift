@@ -108,17 +108,9 @@ struct VibeIslandView: View {
     }
 
     private func handleChoice(_ q: VibeQuestion, _ choice: VibeQuestion.Choice) {
-        // Sera complété en Task 5 (EventSender). V1 : stub + clear question.
-        EventSenderStub.sendChoice(toolUseId: q.toolUseId, label: choice.label)
-        model.question = nil
+        EventSender.sendChoice(toolUseId: q.toolUseId, label: choice.label)
+        model.apply(state: model.state, toolName: model.toolName, question: nil)
     }
 
     enum Mode: Equatable { case compact, extended, panel }
-}
-
-// Stub temporaire — remplacé par le vrai EventSender en Task 5.
-private enum EventSenderStub {
-    static func sendChoice(toolUseId: String, label: String) {
-        print("[stub] choice toolUseId=\(toolUseId) label=\(label)")
-    }
 }
