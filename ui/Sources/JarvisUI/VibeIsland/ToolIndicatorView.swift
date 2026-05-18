@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ToolIndicatorView: View {
     let toolName: String
-    @State private var spinnerRotation: Double = 0
 
     var body: some View {
         HStack(spacing: 6) {
