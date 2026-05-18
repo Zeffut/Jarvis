@@ -31,18 +31,23 @@ final class VibeIslandPanel: NSPanel {
         let hosting = NSHostingView(rootView: VibeIslandView(model: model))
         hosting.autoresizingMask = [.width, .height]
         contentView = hosting
+
+        model.onModeChange = { [weak self] mode in
+            let h: CGFloat = (mode == .panel) ? 260 : 60
+            self?.anchorToNotch(panelHeight: h)
+        }
     }
 
     /// Positionne le panel centré horizontalement, ancré tout en haut (sous la notch
     /// si présente, sinon collé au bord supérieur).
-    func anchorToNotch() {
+    func anchorToNotch(panelHeight: CGFloat = 60) {
         guard let screen = NSScreen.main else { return }
-        let panelSize = NSSize(width: 200, height: 60)
+        let panelWidth: CGFloat = 400
         let sf = screen.frame
-        let notchInset = screen.safeAreaInsets.top   // 0 si pas de notch
-        let x = sf.origin.x + (sf.width - panelSize.width) / 2
-        let y = sf.origin.y + sf.height - panelSize.height + max(notchInset - 4, 0)
-        setFrame(NSRect(x: x, y: y, width: panelSize.width, height: panelSize.height),
+        let notchInset = screen.safeAreaInsets.top
+        let x = sf.origin.x + (sf.width - panelWidth) / 2
+        let y = sf.origin.y + sf.height - panelHeight + max(notchInset - 4, 0)
+        setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight),
                  display: true)
     }
 

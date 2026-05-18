@@ -9,6 +9,7 @@ struct JarvisMessage {
     let token: String?              // présent si state == "text_token"
     let url: String?                // présent si state == "browser_open"
     let toolName: String?           // NOUVEAU
+    let question: VibeQuestion?     // NOUVEAU
 }
 
 /// Écoute /tmp/jarvis-ui.sock, parse les messages JSON et les diffuse via NotificationCenter.
@@ -92,9 +93,23 @@ final class SocketListener {
         let token          = json["token"]   as? String
         let url            = json["url"]     as? String
         let toolName       = json["tool_name"] as? String
+
+        var parsedQuestion: VibeQuestion? = nil
+        if state == "question",
+           let prompt = json["question"] as? String,
+           let toolUseId = json["tool_use_id"] as? String,
+           let choicesArr = json["choices"] as? [[String: Any]] {
+            let choices: [VibeQuestion.Choice] = choicesArr.compactMap { dict in
+                guard let id = dict["id"] as? String,
+                      let label = dict["label"] as? String else { return nil }
+                return VibeQuestion.Choice(id: id, label: label)
+            }
+            parsedQuestion = VibeQuestion(toolUseId: toolUseId, prompt: prompt, choices: choices)
+        }
+
         let msg = JarvisMessage(state: state, amplitude: amplitude,
                                 displayContent: displayContent, token: token, url: url,
-                                toolName: toolName)
+                                toolName: toolName, question: parsedQuestion)
 
         DispatchQueue.main.async {
             NotificationCenter.default.post(

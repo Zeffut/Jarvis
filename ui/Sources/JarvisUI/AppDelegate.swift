@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             self.panel?.stateModel.state = msg.state
             self.panel?.stateModel.toolName = msg.toolName
+            self.panel?.stateModel.question = msg.question
         }
     }
 
