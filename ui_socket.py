@@ -27,11 +27,11 @@ def launch_ui() -> None:
         )
 
 
-def send_state(state: str, amplitude: float = 0.0) -> None:
+def send_state(state: str, amplitude: float = 0.0, tool_name: str | None = None) -> None:
     """Envoie l'état courant à l'UI Swift. Fire-and-forget, jamais bloquant."""
     if state not in _VALID_STATES:
         return
-    _send_to(SOCKET_PATH, state, amplitude)
+    _send_to(SOCKET_PATH, state, amplitude, tool_name=tool_name)
 
 
 def send_display(content: dict) -> None:
@@ -71,6 +71,7 @@ def _send_to(
     content: dict | None = None,
     token: str | None = None,
     url: str | None = None,
+    tool_name: str | None = None,
 ) -> None:
     """Bas niveau — permet d'injecter un path custom en test."""
     if not UI_ENABLED:
@@ -86,6 +87,8 @@ def _send_to(
                 payload["token"] = token
             if url is not None:
                 payload["url"] = url
+            if tool_name is not None:
+                payload["tool_name"] = tool_name
             s.sendall(json.dumps(payload).encode())
     except Exception:
         pass
