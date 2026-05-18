@@ -14,3 +14,4 @@ build/
 test_wake.py
 test_transcribe.py
 models/
+.superpowers/
