@@ -80,17 +80,14 @@ struct VibeIslandView: View {
 
     private var compactBar: some View {
         HStack(spacing: 0) {
-            // Aile gauche visible : Arc Reactor
-            ArcReactorView(state: arcState, size: 18)
+            // Aile gauche : Arc Reactor (seul élément visuel — pas de texte)
+            ArcReactorView(state: arcState, size: 24)
                 .frame(width: 60, alignment: .center)
             // Centre masqué par la notch
             Spacer().frame(width: Self.notchWidth)
-            // Aile droite visible : label d'état
-            Text(stateLabel)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.85))
-                .lineLimit(1)
-                .frame(width: 60, alignment: .center)
+            // Aile droite : vide (symétrie de la forme avec la notch)
+            Color.clear
+                .frame(width: 60)
         }
         .frame(width: 320, height: 32)
         .background(

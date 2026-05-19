@@ -9,9 +9,11 @@ enum ArcReactorState: String, CaseIterable {
     case speaking
 
     /// Couleur dominante de l'anneau et du glow.
+    /// Standby garde une saturation complète pour rester visible ;
+    /// on calme la vie via les vitesses d'animation, pas la couleur.
     var color: Color {
         switch self {
-        case .standby:   return Color(red: 0.36, green: 0.78, blue: 1.00).opacity(0.4)
+        case .standby:   return Color(red: 0.36, green: 0.78, blue: 1.00).opacity(0.85)
         case .listening: return Color(red: 0.36, green: 0.78, blue: 1.00)
         case .thinking:  return Color(red: 1.00, green: 0.66, blue: 0.33)
         case .speaking:  return Color(red: 0.60, green: 0.93, blue: 1.00)

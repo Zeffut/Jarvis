@@ -84,17 +84,17 @@ struct ArcReactorView: View {
     }
 
     /// Onde concentrique unique — utilisée 2× désynchronisée.
+    /// scaleEffect max 1.25x pour rester dans la hauteur du pill compact (32px).
     @ViewBuilder
     private func pulseWave(progress: CGFloat, opacity: Double) -> some View {
         Circle()
             .stroke(
                 state.color,
-                style: StrokeStyle(lineWidth: max(0.8, size / 22), lineCap: .round)
+                style: StrokeStyle(lineWidth: max(1.0, size / 18), lineCap: .round)
             )
-            .scaleEffect(0.35 + progress * 1.15)   // grandit de 35% → 150% de size
-            .opacity(opacity * (1.0 - Double(progress)))   // fade out pendant l'expansion
+            .scaleEffect(0.4 + progress * 0.85)   // grandit de 40% → 125% de size
+            .opacity(opacity * (1.0 - Double(progress)))
             .frame(width: size, height: size)
-            .blur(radius: size * 0.015)   // micro-blur → plus organique
     }
 
     // MARK: - Animations
