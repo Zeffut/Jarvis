@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Rendu de l'Arc Reactor — anneaux, cœur, particules, scan lines, flicker.
+/// Rendu de l'Arc Reactor — anneaux, cœur, pulse waves, particules, scan lines, flicker.
 struct ArcReactorView: View {
     let state: ArcReactorState
     let size: CGFloat
@@ -10,11 +10,23 @@ struct ArcReactorView: View {
     @State private var breatheScale: CGFloat = 1.0
     @State private var flickerOpacity: Double = 1.0
 
+    // Deux pulse waves désynchronisées pour un effet continu (l'une émerge
+    // pendant que l'autre se dissipe).
+    @State private var pulse1Progress: CGFloat = 0
+    @State private var pulse1Opacity: Double = 0
+    @State private var pulse2Progress: CGFloat = 0
+    @State private var pulse2Opacity: Double = 0
+
     private var showFullDetails: Bool { size >= 40 }
 
     var body: some View {
         ZStack {
-            // Anneau extérieur : dashed, rotation lente
+            // ── Pulse waves : anneaux qui s'élargissent depuis le cœur ──────
+            // Visibles à toutes les tailles → donne la vie en mode compact.
+            pulseWave(progress: pulse1Progress, opacity: pulse1Opacity)
+            pulseWave(progress: pulse2Progress, opacity: pulse2Opacity)
+
+            // ── Anneau extérieur : dashed, rotation lente ──
             Circle()
                 .strokeBorder(
                     state.color,
@@ -27,7 +39,7 @@ struct ArcReactorView: View {
                 .rotationEffect(.degrees(ringRotation))
                 .shadow(color: state.color.opacity(0.8), radius: state.glowRadius / 2)
 
-            // Anneau intérieur : dashed fin, statique
+            // ── Anneau intérieur dashed fin (uniquement en grand) ──
             if showFullDetails {
                 Circle()
                     .strokeBorder(
@@ -37,13 +49,13 @@ struct ArcReactorView: View {
                     .padding(size * 0.10)
             }
 
-            // Particules orbitales (12h / 6h)
+            // ── Particules orbitales (uniquement en grand) ──
             if showFullDetails {
                 ParticlesOrbit(color: state.color, size: size)
                     .rotationEffect(.degrees(particleRotation))
             }
 
-            // Cœur : gradient radial
+            // ── Cœur : gradient radial qui respire ──
             Circle()
                 .fill(
                     RadialGradient(
@@ -55,9 +67,9 @@ struct ArcReactorView: View {
                 )
                 .frame(width: size * 0.4, height: size * 0.4)
                 .scaleEffect(breatheScale)
-                .shadow(color: state.color, radius: state.glowRadius)
+                .shadow(color: state.color, radius: state.glowRadius * Double(breatheScale))
 
-            // Scan lines holographiques
+            // ── Scan lines holographiques (uniquement en grand) ──
             if showFullDetails && state.hasHologramEffects {
                 ScanLinesOverlay()
                     .clipShape(Circle())
@@ -71,6 +83,22 @@ struct ArcReactorView: View {
         .onChange(of: state) { _ in restartAnimations() }
     }
 
+    /// Onde concentrique unique — utilisée 2× désynchronisée.
+    @ViewBuilder
+    private func pulseWave(progress: CGFloat, opacity: Double) -> some View {
+        Circle()
+            .stroke(
+                state.color,
+                style: StrokeStyle(lineWidth: max(0.8, size / 22), lineCap: .round)
+            )
+            .scaleEffect(0.35 + progress * 1.15)   // grandit de 35% → 150% de size
+            .opacity(opacity * (1.0 - Double(progress)))   // fade out pendant l'expansion
+            .frame(width: size, height: size)
+            .blur(radius: size * 0.015)   // micro-blur → plus organique
+    }
+
+    // MARK: - Animations
+
     private func startAnimations() {
         // Rotation continue anneau extérieur
         withAnimation(.linear(duration: state.rotationDuration).repeatForever(autoreverses: false)) {
@@ -80,14 +108,17 @@ struct ArcReactorView: View {
         withAnimation(.linear(duration: state.rotationDuration * 0.45).repeatForever(autoreverses: false)) {
             particleRotation = -360
         }
-        // Breathe du cœur
+        // Breathe du cœur — plus marqué : 1.0 ↔ 1.18
         withAnimation(.easeInOut(duration: state.breatheDuration).repeatForever(autoreverses: true)) {
-            breatheScale = 1.05
+            breatheScale = 1.18
         }
-        // Flicker holographique aléatoire
-        if state.hasHologramEffects {
-            scheduleNextFlicker()
+        // Pulse waves (2 en alternance, décalées d'un demi-cycle)
+        schedulePulse1()
+        DispatchQueue.main.asyncAfter(deadline: .now() + state.pulseInterval / 2) {
+            schedulePulse2()
         }
+        // Flicker holographique aléatoire — actif à TOUTES les tailles maintenant
+        scheduleNextFlicker()
     }
 
     private func restartAnimations() {
@@ -95,15 +126,48 @@ struct ArcReactorView: View {
         particleRotation = 0
         breatheScale = 1.0
         flickerOpacity = 1.0
+        pulse1Progress = 0
+        pulse1Opacity = 0
+        pulse2Progress = 0
+        pulse2Opacity = 0
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             startAnimations()
         }
     }
 
+    /// Pulse 1 : émet → fade, puis re-schedule.
+    private func schedulePulse1() {
+        pulse1Progress = 0
+        pulse1Opacity = 0.85
+        let expandDuration = 1.4
+        withAnimation(.easeOut(duration: expandDuration)) {
+            pulse1Progress = 1
+            pulse1Opacity = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + state.pulseInterval) {
+            schedulePulse1()
+        }
+    }
+
+    /// Pulse 2 : décalé d'un demi-cycle → onde quasi-continue.
+    private func schedulePulse2() {
+        pulse2Progress = 0
+        pulse2Opacity = 0.85
+        let expandDuration = 1.4
+        withAnimation(.easeOut(duration: expandDuration)) {
+            pulse2Progress = 1
+            pulse2Opacity = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + state.pulseInterval) {
+            schedulePulse2()
+        }
+    }
+
     private func scheduleNextFlicker() {
-        let delay = Double.random(in: 3.0...5.0)
+        let baseDelay = state.flickerInterval
+        let jitter = Double.random(in: -0.3...0.3) * baseDelay
+        let delay = max(0.5, baseDelay + jitter)
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            guard state.hasHologramEffects else { return }
             withAnimation(.linear(duration: 0.05)) { flickerOpacity = 0.4 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 withAnimation(.linear(duration: 0.05)) { flickerOpacity = 1.0 }

@@ -48,8 +48,29 @@ enum ArcReactorState: String, CaseIterable {
         }
     }
 
-    /// Active scan lines + flicker ? (off en standby pour rester discret)
+    /// Active scan lines (off en standby pour rester discret).
     var hasHologramEffects: Bool {
         self != .standby
+    }
+
+    /// Intervalle entre deux pulses (ondes concentriques émises depuis le cœur).
+    /// Le pulse en standby donne le côté "vivant" même au repos.
+    var pulseInterval: Double {
+        switch self {
+        case .standby:   return 3.5
+        case .listening: return 1.4
+        case .thinking:  return 1.8
+        case .speaking:  return 0.9
+        }
+    }
+
+    /// Intervalle moyen entre deux flickers holographiques.
+    var flickerInterval: Double {
+        switch self {
+        case .standby:   return 6.0   // rare, presque dormant
+        case .listening: return 2.5
+        case .thinking:  return 1.8
+        case .speaking:  return 3.0
+        }
     }
 }
