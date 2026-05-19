@@ -23,8 +23,11 @@ echo "[start] Vibe Island UI…"
 JARVIS_UI=1 "$UI_BIN" &
 UI_PID=$!
 
-# Trap : à la sortie (Ctrl+C, exit Python, erreur), tue l'UI
+# Trap : à la sortie (Ctrl+C, exit Python, erreur), tue l'UI une seule fois
+_cleaned=0
 cleanup() {
+    [ "$_cleaned" = "1" ] && return
+    _cleaned=1
     echo ""
     echo "[start] arrêt UI (pid=$UI_PID)…"
     kill "$UI_PID" 2>/dev/null || true
@@ -32,7 +35,7 @@ cleanup() {
     rm -f /tmp/jarvis-ui.sock /tmp/jarvis-ui-events.sock 2>/dev/null || true
     echo "[start] done."
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
 
 # Lance Jarvis Python en foreground (Ctrl+C va directement à lui → shutdown propre)
 echo "[start] Jarvis (main.py)…"
