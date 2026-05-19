@@ -10,7 +10,7 @@ struct QuestionPanelView: View {
             // Zone notch (~32px) : chevauche la notch système, contenu central masqué.
             Spacer().frame(height: 32)
 
-            ArcReactorView(state: arcState, size: 80)
+            OrbView(state: arcState, size: 80)
                 .padding(.top, 14)
                 .padding(.bottom, 14)
 
