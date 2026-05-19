@@ -7,10 +7,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "JarvisUI",
-            path: "Sources/JarvisUI",
-            linkerSettings: [
-                .linkedFramework("WebKit")
-            ]
+            path: "Sources/JarvisUI"
         )
     ]
 )
