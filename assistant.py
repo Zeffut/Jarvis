@@ -118,6 +118,7 @@ class Assistant:
         with self._choice_lock:
             self._choice_events[tool_use_id] = evt
             if tool_use_id in self._pending_choices:
+                self._choice_events.pop(tool_use_id)
                 return self._pending_choices.pop(tool_use_id)
         received = evt.wait(timeout)
         with self._choice_lock:
@@ -412,6 +413,10 @@ class Assistant:
     def shutdown(self) -> None:
         """Arrêt propre — appelé à la fermeture de Jarvis."""
         jlog.info("CLAUDE", "subprocess shutdown")
+        try:
+            self._event_listener.stop()
+        except Exception:
+            pass
         self._shutdown_event.set()
         with self._lock:
             if self._proc and self._proc.poll() is None:
