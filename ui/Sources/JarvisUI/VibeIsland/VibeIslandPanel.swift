@@ -38,15 +38,21 @@ final class VibeIslandPanel: NSPanel {
         }
     }
 
-    /// Positionne le panel centré horizontalement, ancré tout en haut (sous la notch
-    /// si présente, sinon collé au bord supérieur).
+    /// Positionne le panel centré horizontalement, top juste sous la barre de menus
+    /// (ou sous la notch sur les Macs qui en ont une). Le content SwiftUI est
+    /// top-aligned, donc le pill apparaît collé sous la menu bar.
     func anchorToNotch(panelHeight: CGFloat = 60) {
         guard let screen = NSScreen.main else { return }
         let panelWidth: CGFloat = 400
         let sf = screen.frame
+        // Hauteur réelle de la barre de menus système :
+        // - Mac avec notch  → safeAreaInsets.top ≈ 32-38px
+        // - Mac sans notch  → fallback 24px (barre de menus standard)
         let notchInset = screen.safeAreaInsets.top
+        let menuBarHeight: CGFloat = notchInset > 0 ? notchInset : 24
         let x = sf.origin.x + (sf.width - panelWidth) / 2
-        let y = sf.origin.y + sf.height - panelHeight + max(notchInset - 4, 0)
+        // Top du panel = bas de la menu bar → pill visible juste dessous.
+        let y = sf.origin.y + sf.height - panelHeight - menuBarHeight
         setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight),
                  display: true)
     }
