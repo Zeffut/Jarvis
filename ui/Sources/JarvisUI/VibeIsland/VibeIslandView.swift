@@ -79,47 +79,48 @@ struct VibeIslandView: View {
     private static let notchWidth: CGFloat = 200
 
     private var compactBar: some View {
-        HStack(spacing: 0) {
-            // Aile gauche : Arc Reactor (seul élément visuel — pas de texte)
-            OrbView(state: arcState, size: 24)
-                .frame(width: 60, alignment: .center)
-            // Centre masqué par la notch
-            Spacer().frame(width: Self.notchWidth)
-            // Aile droite : vide (symétrie de la forme avec la notch)
+        // Mini pill carré juste à gauche de la notch. Bord droit collé à la notch
+        // (corner top/bottom trailing = 0), bord gauche arrondi (extrémité).
+        let pillWidth: CGFloat = 36
+        return ZStack {
             Color.clear
-                .frame(width: 60)
+            OrbView(state: arcState, size: 24)
+                .frame(width: pillWidth, height: 32)
+                .background(
+                    UnevenRoundedRectangle(
+                        cornerRadii: .init(topLeading: 0, bottomLeading: 14,
+                                           bottomTrailing: 0, topTrailing: 0)
+                    ).fill(Color.black)
+                )
+                .offset(x: -(Self.notchWidth / 2 + pillWidth / 2))
         }
-        .frame(width: 320, height: 32)
-        .background(
-            UnevenRoundedRectangle(
-                cornerRadii: .init(topLeading: 0, bottomLeading: 18,
-                                   bottomTrailing: 18, topTrailing: 0)
-            ).fill(Color.black)
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var extendedBar: some View {
-        HStack(spacing: 0) {
-            // Aile gauche : Arc Reactor
-            OrbView(state: arcState, size: 22)
-                .frame(width: 130, alignment: .center)
-            // Centre masqué par la notch
-            Spacer().frame(width: Self.notchWidth)
-            // Aile droite : tool name + spinner
-            Group {
+        // Pill plus longue qui s'étire à gauche depuis la notch. Bord droit
+        // collé à la notch (avec orbe), tool name à gauche.
+        let pillWidth: CGFloat = 220
+        return ZStack {
+            Color.clear
+            HStack(spacing: 10) {
                 if let tool = model.toolName {
                     ToolIndicatorView(toolName: tool)
                 }
+                OrbView(state: arcState, size: 22)
             }
-            .frame(width: 130, alignment: .center)
+            .padding(.leading, 14)
+            .padding(.trailing, 8)
+            .frame(width: pillWidth, height: 38)
+            .background(
+                UnevenRoundedRectangle(
+                    cornerRadii: .init(topLeading: 0, bottomLeading: 18,
+                                       bottomTrailing: 0, topTrailing: 0)
+                ).fill(Color.black)
+            )
+            .offset(x: -(Self.notchWidth / 2 + pillWidth / 2))
         }
-        .frame(width: 460, height: 40)
-        .background(
-            UnevenRoundedRectangle(
-                cornerRadii: .init(topLeading: 0, bottomLeading: 22,
-                                   bottomTrailing: 22, topTrailing: 0)
-            ).fill(Color.black)
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var stateLabel: String {

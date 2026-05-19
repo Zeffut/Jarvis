@@ -8,7 +8,7 @@ final class VibeIslandPanel: NSPanel {
 
     convenience init() {
         self.init(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: 480, height: 32)),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: 700, height: 32)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -52,7 +52,7 @@ final class VibeIslandPanel: NSPanel {
     /// menu bar standard pour rester visible.
     func anchorToNotch(panelHeight: CGFloat = 32) {
         guard let screen = NSScreen.main else { return }
-        let panelWidth: CGFloat = 480
+        let panelWidth: CGFloat = 700
         let sf = screen.frame
         let notchInset = screen.safeAreaInsets.top
         let x = sf.origin.x + (sf.width - panelWidth) / 2
