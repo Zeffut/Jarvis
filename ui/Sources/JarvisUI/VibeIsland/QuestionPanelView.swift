@@ -7,8 +7,11 @@ struct QuestionPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Zone notch (~32px) : chevauche la notch système, contenu central masqué.
+            Spacer().frame(height: 32)
+
             ArcReactorView(state: arcState, size: 80)
-                .padding(.top, 18)
+                .padding(.top, 14)
                 .padding(.bottom, 14)
 
             Text(question.prompt)
@@ -33,10 +36,12 @@ struct QuestionPanelView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 16)
         }
-        .frame(width: 400)
+        .frame(width: 460)
         .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(Color.black)
+            UnevenRoundedRectangle(
+                cornerRadii: .init(topLeading: 0, bottomLeading: 24,
+                                   bottomTrailing: 24, topTrailing: 0)
+            ).fill(Color.black)
         )
     }
 }

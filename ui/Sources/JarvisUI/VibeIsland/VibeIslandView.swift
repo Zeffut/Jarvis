@@ -74,28 +74,55 @@ struct VibeIslandView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.75), value: mode)
     }
 
+    // Largeur estimée de la notch MBP M2/M3 (~185-200px). Le contenu central
+    // dans cette zone est masqué physiquement par le trou de la notch.
+    private static let notchWidth: CGFloat = 200
+
     private var compactBar: some View {
-        HStack(spacing: 8) {
-            ArcReactorView(state: arcState, size: 18).padding(.leading, 10)
+        HStack(spacing: 0) {
+            // Aile gauche visible : Arc Reactor
+            ArcReactorView(state: arcState, size: 18)
+                .frame(width: 60, alignment: .center)
+            // Centre masqué par la notch
+            Spacer().frame(width: Self.notchWidth)
+            // Aile droite visible : label d'état
             Text(stateLabel)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.white.opacity(0.85))
-            Spacer(minLength: 0)
+                .lineLimit(1)
+                .frame(width: 60, alignment: .center)
         }
-        .frame(width: 160, height: 30)
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.black))
+        .frame(width: 320, height: 32)
+        .background(
+            UnevenRoundedRectangle(
+                cornerRadii: .init(topLeading: 0, bottomLeading: 18,
+                                   bottomTrailing: 18, topTrailing: 0)
+            ).fill(Color.black)
+        )
     }
 
     private var extendedBar: some View {
-        HStack(spacing: 8) {
-            ArcReactorView(state: arcState, size: 22).padding(.leading, 10)
-            if let tool = model.toolName {
-                ToolIndicatorView(toolName: tool)
+        HStack(spacing: 0) {
+            // Aile gauche : Arc Reactor
+            ArcReactorView(state: arcState, size: 22)
+                .frame(width: 130, alignment: .center)
+            // Centre masqué par la notch
+            Spacer().frame(width: Self.notchWidth)
+            // Aile droite : tool name + spinner
+            Group {
+                if let tool = model.toolName {
+                    ToolIndicatorView(toolName: tool)
+                }
             }
-            Spacer(minLength: 0)
+            .frame(width: 130, alignment: .center)
         }
-        .frame(width: 340, height: 34)
-        .background(RoundedRectangle(cornerRadius: 17).fill(Color.black))
+        .frame(width: 460, height: 40)
+        .background(
+            UnevenRoundedRectangle(
+                cornerRadii: .init(topLeading: 0, bottomLeading: 22,
+                                   bottomTrailing: 22, topTrailing: 0)
+            ).fill(Color.black)
+        )
     }
 
     private var stateLabel: String {

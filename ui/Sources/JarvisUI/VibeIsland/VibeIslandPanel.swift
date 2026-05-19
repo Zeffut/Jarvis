@@ -8,7 +8,7 @@ final class VibeIslandPanel: NSPanel {
 
     convenience init() {
         self.init(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: 400, height: 60)),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: 480, height: 32)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -33,26 +33,37 @@ final class VibeIslandPanel: NSPanel {
         contentView = hosting
 
         model.onModeChange = { [weak self] mode in
-            let h: CGFloat = (mode == .panel) ? 260 : 60
+            let h: CGFloat
+            switch mode {
+            case .compact:  h = 32
+            case .extended: h = 40
+            case .panel:    h = 300
+            }
             self?.anchorToNotch(panelHeight: h)
         }
     }
 
-    /// Positionne le panel centré horizontalement, top juste sous la barre de menus
-    /// (ou sous la notch sur les Macs qui en ont une). Le content SwiftUI est
-    /// top-aligned, donc le pill apparaît collé sous la menu bar.
-    func anchorToNotch(panelHeight: CGFloat = 60) {
+    /// Positionne le panel centré horizontalement avec son TOP au niveau du top
+    /// de l'écran — chevauche donc la zone de la notch. La notch physique (trou
+    /// dans l'écran) masque la partie centrale du pill, ne laissant visibles que
+    /// les "ailes" de chaque côté = effet Dynamic Island.
+    ///
+    /// Sur un Mac sans notch (écran externe, MBA M2…), le pill est placé sous la
+    /// menu bar standard pour rester visible.
+    func anchorToNotch(panelHeight: CGFloat = 32) {
         guard let screen = NSScreen.main else { return }
-        let panelWidth: CGFloat = 400
+        let panelWidth: CGFloat = 480
         let sf = screen.frame
-        // Hauteur réelle de la barre de menus système :
-        // - Mac avec notch  → safeAreaInsets.top ≈ 32-38px
-        // - Mac sans notch  → fallback 24px (barre de menus standard)
         let notchInset = screen.safeAreaInsets.top
-        let menuBarHeight: CGFloat = notchInset > 0 ? notchInset : 24
         let x = sf.origin.x + (sf.width - panelWidth) / 2
-        // Top du panel = bas de la menu bar → pill visible juste dessous.
-        let y = sf.origin.y + sf.height - panelHeight - menuBarHeight
+        let y: CGFloat
+        if notchInset > 0 {
+            // Mac avec notch : top du panel = top de l'écran
+            y = sf.origin.y + sf.height - panelHeight
+        } else {
+            // Mac sans notch : sous la menu bar standard 24px
+            y = sf.origin.y + sf.height - panelHeight - 24
+        }
         setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight),
                  display: true)
     }
