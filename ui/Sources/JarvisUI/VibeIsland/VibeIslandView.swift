@@ -74,9 +74,12 @@ struct VibeIslandView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.75), value: mode)
     }
 
-    // Largeur estimée de la notch MBP M2/M3 (~185-200px). Le contenu central
-    // dans cette zone est masqué physiquement par le trou de la notch.
-    private static let notchWidth: CGFloat = 200
+    // Largeur estimée de la notch MBP M2/M3 (vraie ≈ 184-188px). On prend
+    // une valeur LÉGÈREMENT inférieure pour garantir un chevauchement de
+    // quelques pixels avec la notch — sinon on voit un gap entre le pill
+    // et la notch. La partie qui dépasse dans la notch est masquée
+    // physiquement par le trou.
+    private static let notchWidth: CGFloat = 170
 
     private var compactBar: some View {
         // Mini pill carré juste à gauche de la notch. Bord droit collé à la notch
