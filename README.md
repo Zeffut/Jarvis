@@ -40,7 +40,7 @@ Optional native UI (JARVIS_UI=1):
 ## Setup
 
 ```bash
-git clone https://github.com/TDS-Upec/Jarvis.git
+git clone https://github.com/Zeffut/Jarvis.git
 cd Jarvis
 python3 -m venv .venv
 source .venv/bin/activate
