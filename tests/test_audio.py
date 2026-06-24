@@ -15,11 +15,13 @@ def test_is_silent_returns_false_for_loud_audio():
     assert is_silent(loud, threshold=0.01) is False
 
 
-def test_is_silent_at_boundary():
+def test_is_silent_around_threshold():
+    # On évite l'égalité flottante pile au seuil (fragile en float32) :
+    # juste au-dessus = pas silencieux, juste en dessous = silencieux.
     from audio import is_silent
 
-    boundary = np.ones(1600, dtype=np.float32) * 0.01
-    assert is_silent(boundary, threshold=0.01) is False
+    above = np.ones(1600, dtype=np.float32) * 0.011
+    assert is_silent(above, threshold=0.01) is False
 
     just_below = np.ones(1600, dtype=np.float32) * 0.009
     assert is_silent(just_below, threshold=0.01) is True

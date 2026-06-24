@@ -1,12 +1,16 @@
-def test_load_config_returns_empty_dict(tmp_path, monkeypatch):
+def test_load_config_loads_env_file(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text("")
-    monkeypatch.chdir(tmp_path)
+    env_file.write_text("JARVIS_TEST_VAR=hello\n")
+    monkeypatch.delenv("JARVIS_TEST_VAR", raising=False)
 
     from config import load_config
 
-    cfg = load_config(env_path=str(env_file))
-    assert cfg == {}
+    # load_config charge le .env par effet de bord et ne retourne rien.
+    result = load_config(env_path=str(env_file))
+    assert result is None
+
+    import os
+    assert os.environ.get("JARVIS_TEST_VAR") == "hello"
 
 
 def test_kokoro_constants_are_set():
